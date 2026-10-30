@@ -5,11 +5,13 @@ const cors = require("cors");
 const connectDB = require("./models/db");
 const productRouter = require("./routers/productRouter");
 const app = express();
+const orderRouter = require("./routers/orderRouter");
 
 app.use(cors());
 app.use(express.json());
 app.use("/categories", categoryRouter);
 app.use("/products", productRouter);
+app.use("/orders", orderRouter);
 const PORT = 5000;
 
 const startServer = async () => {
