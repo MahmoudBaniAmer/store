@@ -6,11 +6,16 @@ const {
     createCategory,
     getCategories,
     updateCategory
-
 } = require("../controllers/categoryController");
 
-router.post("/", createCategory);
+const authentication = require("../middleware/authentication");
+const authorization = require("../middleware/authorization");
+
+// Public Route
 router.get("/", getCategories);
-router.put("/:id", updateCategory);
+
+// Admin Protected Routes
+router.post("/", authentication, authorization("admin"), createCategory);
+router.put("/:id", authentication, authorization("admin"), updateCategory);
 
 module.exports = router;

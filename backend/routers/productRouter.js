@@ -1,6 +1,7 @@
 
 const express = require("express");
-const router = express.Router();
+
+const productRouter = express.Router();
 
 const {
     createProduct,
@@ -10,10 +11,33 @@ const {
     deleteProduct
 } = require("../controllers/productController");
 
-router.post("/", createProduct);
-router.get("/", getProducts);
-router.get("/:id", getProductById);
-router.put("/:id", updateProduct);
-router.delete("/:id", deleteProduct);
+const authentication = require("../middleware/authentication");
+const authorization = require("../middleware/authorization");
 
-module.exports = router;
+// Public Routes
+productRouter.get("/", getProducts);
+productRouter.get("/:id", getProductById);
+
+// Admin Protected Routes
+productRouter.post(
+    "/",
+    authentication,
+    authorization("admin"),
+    createProduct
+);
+
+productRouter.put(
+    "/:id",
+    authentication,
+    authorization("admin"),
+    updateProduct
+);
+
+productRouter.delete(
+    "/:id",
+    authentication,
+    authorization("admin"),
+    deleteProduct
+);
+
+module.exports = productRouter;
