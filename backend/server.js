@@ -1,4 +1,4 @@
-
+require("dotenv").config();
 const express = require("express");
 const categoryRouter = require("./routers/categoryRouter");
 const cors = require("cors");
