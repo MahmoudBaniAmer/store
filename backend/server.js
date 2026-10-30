@@ -3,12 +3,13 @@ const express = require("express");
 const categoryRouter = require("./routers/categoryRouter");
 const cors = require("cors");
 const connectDB = require("./models/db");
-
+const productRouter = require("./routers/productRouter");
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use("/categories", categoryRouter);
+app.use("/products", productRouter);
 const PORT = 5000;
 
 const startServer = async () => {
