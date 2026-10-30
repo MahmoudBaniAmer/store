@@ -6,12 +6,13 @@ const connectDB = require("./models/db");
 const productRouter = require("./routers/productRouter");
 const app = express();
 const orderRouter = require("./routers/orderRouter");
-
+const userRouter = require("./routers/userRouter");
 app.use(cors());
 app.use(express.json());
 app.use("/categories", categoryRouter);
 app.use("/products", productRouter);
 app.use("/orders", orderRouter);
+app.use("/api/auth", userRouter);
 const PORT = 5000;
 
 const startServer = async () => {
