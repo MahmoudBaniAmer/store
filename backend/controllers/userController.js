@@ -1,12 +1,27 @@
 
 const User = require("../models/User");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+
 // Register User
 const createUser = async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        const existingUser = await User.findOne({ email });
+        // Check required fields
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                message: "Name, email and password are required"
+            });
+        }
+
+        // Normalize email
+        const normalizedEmail = email.trim().toLowerCase();
+
+        // Check if email already exists
+        const existingUser = await User.findOne({
+            email: normalizedEmail
+        });
 
         if (existingUser) {
             return res.status(400).json({
@@ -14,15 +29,16 @@ const createUser = async (req, res) => {
             });
         }
 
+        // Create new user
         const newUser = new User({
-            name,
-            email,
+            name: name.trim(),
+            email: normalizedEmail,
             password
         });
 
         await newUser.save();
 
-        res.status(201).json({
+        return res.status(201).json({
             message: "User registered successfully",
             user: {
                 _id: newUser._id,
@@ -33,17 +49,31 @@ const createUser = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: error.message
         });
     }
 };
+
+// Login User
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // 1. Find user by email
-        const user = await User.findOne({ email });
+        // Check required fields
+        if (!email || !password) {
+            return res.status(400).json({
+                message: "Email and password are required"
+            });
+        }
+
+        // Normalize email
+        const normalizedEmail = email.trim().toLowerCase();
+
+        // Find user
+        const user = await User.findOne({
+            email: normalizedEmail
+        });
 
         if (!user) {
             return res.status(401).json({
@@ -51,8 +81,11 @@ const login = async (req, res) => {
             });
         }
 
-        // 2. Compare password
-        const isValid = await bcrypt.compare(password, user.password);
+        // Compare password
+        const isValid = await bcrypt.compare(
+            password,
+            user.password
+        );
 
         if (!isValid) {
             return res.status(401).json({
@@ -60,25 +93,24 @@ const login = async (req, res) => {
             });
         }
 
-        // 3. Create JWT Payload
+        // JWT Payload
         const payload = {
             id: user._id,
             role: user.role
         };
 
-        // 4. Token options
+        // Token options
         const options = {
             expiresIn: "5h"
         };
 
-        // 5. Generate Token
+        // Generate JWT
         const userToken = jwt.sign(
             payload,
             process.env.SECRET,
             options
         );
 
-        // 6. Send response
         return res.status(200).json({
             message: "Login successful",
             token: userToken,
@@ -96,6 +128,7 @@ const login = async (req, res) => {
         });
     }
 };
+
 module.exports = {
     createUser,
     login
