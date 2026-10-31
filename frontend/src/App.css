@@ -13,3 +13,137 @@ body {
 #root {
     min-height: 100vh;
 }
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 50px;
+    background-color: white;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.logo {
+    font-size: 26px;
+    font-weight: bold;
+    text-decoration: none;
+    color: #222;
+}
+
+.nav-links {
+    display: flex;
+    gap: 25px;
+}
+
+.nav-links a {
+    text-decoration: none;
+    color: #444;
+    font-size: 15px;
+}
+
+.nav-links a:hover {
+    color: #2563eb;
+}
+
+.nav-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.nav-actions button {
+    padding: 9px 14px;
+    border: 1px solid #ddd;
+    background-color: white;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.nav-actions button:hover {
+    background-color: #f0f0f0;
+}
+
+main {
+    padding: 60px 50px;
+}
+
+.hero {
+    min-height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 40px;
+    padding: 60px 50px;
+}
+
+.hero-content {
+    max-width: 550px;
+}
+
+.hero-label {
+    display: inline-block;
+    margin-bottom: 20px;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: #2563eb;
+}
+
+.hero-content h1 {
+    font-size: 48px;
+    line-height: 1.2;
+    margin-bottom: 20px;
+}
+
+.hero-content p {
+    font-size: 17px;
+    line-height: 1.7;
+    color: #666;
+    margin-bottom: 30px;
+}
+
+.hero-button {
+    display: inline-block;
+    padding: 14px 28px;
+    background-color: #222;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+.hero-button:hover {
+    background-color: #444;
+}
+
+.hero-visual {
+    flex: 1;
+    min-height: 320px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #e9edf5;
+    border-radius: 20px;
+}
+
+.hero-card {
+    width: 260px;
+    padding: 35px;
+    background-color: white;
+    border-radius: 14px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.hero-card span {
+    font-size: 40px;
+}
+
+.hero-card h2 {
+    margin: 15px 0;
+    font-size: 22px;
+}
+
+.hero-card p {
+    color: #666;
+    line-height: 1.5;
+}
