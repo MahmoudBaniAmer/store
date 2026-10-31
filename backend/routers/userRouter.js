@@ -4,7 +4,9 @@ const userRouter = express.Router();
 const {
     createUser,
     login,
-    getUsers
+    getUsers,
+    updateUserRole
+
 } = require("../controllers/userController");
 
 const authentication = require("../middleware/authentication");
@@ -18,6 +20,12 @@ userRouter.get(
     authentication,
     authorization("admin"),
     getUsers
+);
+userRouter.patch(
+    "/users/:id/role",
+    authentication,
+    authorization("admin"),
+    updateUserRole
 );
 
 module.exports = userRouter;

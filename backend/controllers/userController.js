@@ -141,10 +141,52 @@ const getUsers = async (req, res) => {
         });
     }
 };
+// Update User Role (Admin Only)
+const updateUserRole = async (req, res) => {
+    try {
+        const { role } = req.body;
+        const { id } = req.params;
 
+        // Validate role
+        if (!["user", "admin"].includes(role)) {
+            return res.status(400).json({
+                message: "Role must be either user or admin"
+            });
+        }
+
+        // Find user
+        const user = await User.findById(id);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        // Update role
+        user.role = role;
+        await user.save();
+
+        return res.status(200).json({
+            message: "User role updated successfully",
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message
+        });
+    }
+};
 // Export Controllers
 module.exports = {
     createUser,
     login,
-    getUsers
+    getUsers,
+    updateUserRole
 };
