@@ -1,5 +1,8 @@
+import { Routes, Route, Link } from "react-router";
+import Products from "./pages/Products";
 import ProductCard from "./components/ProductCard";
 import "./App.css";
+
 function App() {
   const products = [
     {
@@ -34,15 +37,16 @@ function App() {
 
   return (
     <div>
+      {/* Navbar */}
       <header className="navbar">
-        <a href="/" className="logo">
+        <Link to="/" className="logo">
           Marvet
-        </a>
+        </Link>
 
         <nav className="nav-links">
-          <a href="/">Home</a>
-          <a href="/products">Products</a>
-          <a href="/categories">Categories</a>
+          <Link to="/">Home</Link>
+          <Link to="/products">Products</Link>
+          <Link to="/categories">Categories</Link>
         </nav>
 
         <div className="nav-actions">
@@ -52,55 +56,71 @@ function App() {
         </div>
       </header>
 
-      <main>
-        <section className="hero">
-          <div className="hero-content">
-            <span className="hero-label">WELCOME TO MARVET</span>
+      {/* Pages */}
+      <Routes>
+        {/* Home Page */}
+        <Route
+          path="/"
+          element={
+            <main>
+              {/* Hero Section */}
+              <section className="hero">
+                <div className="hero-content">
+                  <span className="hero-label">WELCOME TO MARVET</span>
 
-            <h1>
-              Find Everything
-              <br />
-              You Love in One Place
-            </h1>
+                  <h1>
+                    Find Everything
+                    <br />
+                    You Love in One Place
+                  </h1>
 
-            <p>
-              Discover electronics, fashion, accessories, and more.
-              Your next favorite product is waiting for you.
-            </p>
+                  <p>
+                    Discover electronics, fashion, accessories, and more.
+                    Your next favorite product is waiting for you.
+                  </p>
 
-            <a href="/products" className="hero-button">
-              Shop Now
-            </a>
-          </div>
+                  <Link to="/products" className="hero-button">
+                    Shop Now
+                  </Link>
+                </div>
 
-          <div className="hero-visual">
-            <div className="hero-card">
-              <span>✨</span>
-              <h2>Discover More</h2>
-              <p>Explore products made for your everyday life.</p>
-            </div>
-          </div>
-        </section>
+                <div className="hero-visual">
+                  <div className="hero-card">
+                    <span>✨</span>
+                    <h2>Discover More</h2>
+                    <p>Explore products made for your everyday life.</p>
+                  </div>
+                </div>
+              </section>
 
-        <section className="featured-products">
-          <div className="section-header">
-            <div>
-              <p className="section-label">OUR COLLECTION</p>
-              <h2>Featured Products</h2>
-            </div>
+              {/* Featured Products */}
+              <section className="featured-products">
+                <div className="section-header">
+                  <div>
+                    <p className="section-label">OUR COLLECTION</p>
+                    <h2>Featured Products</h2>
+                  </div>
 
-            <a href="/products" className="view-all">
-              View All →
-            </a>
-          </div>
+                  <Link to="/products" className="view-all">
+                    View All →
+                  </Link>
+                </div>
 
-          <div className="products-grid">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </section>
-      </main>
+                <div className="products-grid">
+                  {products.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              </section>
+            </main>
+          }
+        />
+
+        {/* Products Page */}
+        <Route path="/products" element={<Products />} />
+      </Routes>
+
+      {/* Footer */}
       <footer className="footer">
         <div className="footer-content">
           <div className="footer-brand">
@@ -110,9 +130,9 @@ function App() {
 
           <div className="footer-links">
             <h3>Quick Links</h3>
-            <a href="/">Home</a>
-            <a href="/products">Products</a>
-            <a href="/categories">Categories</a>
+            <Link to="/">Home</Link>
+            <Link to="/products">Products</Link>
+            <Link to="/categories">Categories</Link>
           </div>
 
           <div className="footer-contact">
