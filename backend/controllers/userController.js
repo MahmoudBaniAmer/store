@@ -1,4 +1,3 @@
-
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -129,7 +128,23 @@ const login = async (req, res) => {
     }
 };
 
+// Get All Users (Admin Only)
+const getUsers = async (req, res) => {
+    try {
+        const users = await User.find().select("-password");
+
+        return res.status(200).json(users);
+
+    } catch (error) {
+        return res.status(500).json({
+            message: error.message
+        });
+    }
+};
+
+// Export Controllers
 module.exports = {
     createUser,
-    login
+    login,
+    getUsers
 };
