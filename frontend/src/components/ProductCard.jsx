@@ -31,8 +31,7 @@ function ProductCard({
             ? product.category?.name
             : product.category;
 
-    const isAvailable = (product.stock ?? 0) > 0;
-
+const isAvailable = product.inStock === true;
     return (
         <div className="product-card">
             <div className="product-image-wrapper">

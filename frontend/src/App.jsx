@@ -47,7 +47,7 @@ function HeartIcon({ filled = false }) {
 
 function App() {
   const navigate = useNavigate();
-
+const [paymentMethod, setPaymentMethod] = useState("cash");
   const [cart, setCart] = useState([]);
   const [favorites, setFavorites] = useState([]);
 
