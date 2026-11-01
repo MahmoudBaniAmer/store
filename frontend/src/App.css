@@ -1201,3 +1201,18 @@ main {
     width: 100%;
     margin-top: 10px;
 }
+
+.cancel-order-button {
+    margin-top: 12px;
+    padding: 10px 16px;
+    background: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.cancel-order-button:hover {
+    background: #b91c1c;
+}

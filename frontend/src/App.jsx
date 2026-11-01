@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import "./App.css";
 import { createOrder } from "./services/orderService";
+import MyOrders from "./pages/MyOrders";
 function CartIcon() {
   return (
     <svg
@@ -202,6 +203,7 @@ const [paymentMethod, setPaymentMethod] = useState("cash");
         </Link>
 
         <nav className="nav-links">
+          <Link to="/my-orders">My Orders</Link>
           <Link to="/">Home</Link>
           <Link to="/products">Products</Link>
           <Link to="/categories">Categories</Link>
@@ -470,7 +472,7 @@ const [paymentMethod, setPaymentMethod] = useState("cash");
             </main>
           }
         />
-
+<Route path="/my-orders" element={<MyOrders />} />
         <Route
           path="/login"
           element={<Login onLogin={handleLogin} />}
