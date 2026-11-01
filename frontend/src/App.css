@@ -1142,3 +1142,62 @@ main {
     font-size: 14px;
     white-space: nowrap;
 }
+
+.payment-method {
+    margin: 25px 0;
+    padding: 20px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+
+.payment-method h3 {
+    margin: 0 0 15px;
+    font-size: 20px;
+}
+
+.payment-method label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0;
+    cursor: pointer;
+}
+
+.payment-method input[type="radio"] {
+    accent-color: #f59e0b;
+}
+
+.demo-card-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.demo-card-form input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.demo-card-form .card-row {
+    display: flex;
+    gap: 12px;
+    grid-column: 1 / -1;
+}
+
+.demo-card-form p {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.cart-items>.hero-button {
+    width: 100%;
+    margin-top: 10px;
+}

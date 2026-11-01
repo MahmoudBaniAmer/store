@@ -413,12 +413,57 @@ const [paymentMethod, setPaymentMethod] = useState("cash");
     .toFixed(2)}
 </h2>
 
+{/* Payment Method */}
+<div className="payment-method">
+  <h3>Payment Method</h3>
+
+  <label>
+    <input
+      type="radio"
+      name="payment"
+      value="cash"
+      checked={paymentMethod === "cash"}
+      onChange={(e) => setPaymentMethod(e.target.value)}
+    />
+    Cash on Delivery
+  </label>
+
+  <label>
+    <input
+      type="radio"
+      name="payment"
+      value="card"
+      checked={paymentMethod === "card"}
+      onChange={(e) => setPaymentMethod(e.target.value)}
+    />
+    Credit / Debit Card
+  </label>
+
+  {paymentMethod === "card" && (
+    <div className="demo-card-form">
+      <input type="text" placeholder="Cardholder Name" />
+      <input
+        type="text"
+        placeholder="Card Number (demo)"
+        maxLength="19"
+      />
+
+      <div className="card-row">
+        <input type="text" placeholder="MM/YY" maxLength="5" />
+        <input type="password" placeholder="CVV" maxLength="4" />
+      </div>
+
+      <p>This is a demo payment. No real card details are processed.</p>
+    </div>
+  )}
+</div>
+
 <button
   type="button"
   className="hero-button"
   onClick={handlePlaceOrder}
 >
-  Place Order
+  {paymentMethod === "card" ? "Pay Now (Demo)" : "Place Order"}
 </button>
                 </div>
               )}
