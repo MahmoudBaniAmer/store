@@ -1,43 +1,80 @@
+import { useState } from "react";
 import { Routes, Route, Link } from "react-router";
 import Products from "./pages/Products";
 import ProductCard from "./components/ProductCard";
+import ProductDetails from "./pages/ProductDetails";
 import "./App.css";
 
 function App() {
-  const products = [
+  const [cart, setCart] = useState([]);
+
+  function addToCart(product) {
+    if (!product) {
+      console.error("[Cart] Cannot add an undefined product.");
+      return;
+    }
+
+    setCart((currentCart) => {
+      const existingItem = currentCart.find(
+        (item) => item._id === product._id
+      );
+
+      if (existingItem) {
+        const updatedCart = currentCart.map((item) =>
+          item._id === product._id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+
+        console.log("[Cart] Quantity increased:", product.name);
+        return updatedCart;
+      }
+
+      console.log("[Cart] Product added:", product.name);
+
+      return [...currentCart, { ...product, quantity: 1 }];
+    });
+  }
+
+  const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+
+  const featuredProducts = [
     {
-      id: 1,
+      _id: "demo-headphones",
       name: "Wireless Headphones",
       price: 45,
       category: "Electronics",
       image: "https://placehold.co/400x300?text=Headphones",
+      stock: 5,
     },
     {
-      id: 2,
+      _id: "demo-watch",
       name: "Smart Watch",
       price: 70,
       category: "Electronics",
       image: "https://placehold.co/400x300?text=Smart+Watch",
+      stock: 5,
     },
     {
-      id: 3,
+      _id: "demo-shirt",
       name: "Classic T-Shirt",
       price: 20,
       category: "Men's Clothing",
       image: "https://placehold.co/400x300?text=T-Shirt",
+      stock: 5,
     },
     {
-      id: 4,
+      _id: "demo-necklace",
       name: "Elegant Necklace",
       price: 35,
       category: "Jewelry",
       image: "https://placehold.co/400x300?text=Necklace",
+      stock: 5,
     },
   ];
 
   return (
     <div>
-      {/* Navbar */}
       <header className="navbar">
         <Link to="/" className="logo">
           Marvet
@@ -50,20 +87,23 @@ function App() {
         </nav>
 
         <div className="nav-actions">
-          <button>Search</button>
-          <button>Cart (0)</button>
+          <Link to="/products" className="nav-action-link">
+            Search
+          </Link>
+
+          <Link to="/cart" className="nav-action-link">
+            Cart ({cartCount})
+          </Link>
+
           <button>Login</button>
         </div>
       </header>
 
-      {/* Pages */}
       <Routes>
-        {/* Home Page */}
         <Route
           path="/"
           element={
             <main>
-              {/* Hero Section */}
               <section className="hero">
                 <div className="hero-content">
                   <span className="hero-label">WELCOME TO MARVET</span>
@@ -93,7 +133,6 @@ function App() {
                 </div>
               </section>
 
-              {/* Featured Products */}
               <section className="featured-products">
                 <div className="section-header">
                   <div>
@@ -107,8 +146,12 @@ function App() {
                 </div>
 
                 <div className="products-grid">
-                  {products.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                  {featuredProducts.map((product) => (
+                    <ProductCard
+                      key={product._id}
+                      product={product}
+                      onAddToCart={addToCart}
+                    />
                   ))}
                 </div>
               </section>
@@ -116,11 +159,52 @@ function App() {
           }
         />
 
-        {/* Products Page */}
-        <Route path="/products" element={<Products />} />
+        <Route
+          path="/products"
+          element={<Products onAddToCart={addToCart} />}
+        />
+
+        <Route
+          path="/products/:id"
+          element={<ProductDetails onAddToCart={addToCart} />}
+        />
+
+        <Route
+          path="/cart"
+          element={
+            <main className="cart-page">
+              <h1>Your Shopping Cart</h1>
+
+              {cart.length === 0 ? (
+                <p>Your cart is empty.</p>
+              ) : (
+                <div className="cart-items">
+                  {cart.map((item) => (
+                    <div className="cart-item" key={item._id}>
+                      <img src={item.image} alt={item.name} />
+
+                      <div>
+                        <h3>{item.name}</h3>
+                        <p>Price: ${item.price}</p>
+                        <p>Quantity: {item.quantity}</p>
+                      </div>
+                    </div>
+                  ))}
+
+                  <h2>
+                    Total: $
+                    {cart.reduce(
+                      (total, item) => total + item.price * item.quantity,
+                      0
+                    ).toFixed(2)}
+                  </h2>
+                </div>
+              )}
+            </main>
+          }
+        />
       </Routes>
 
-      {/* Footer */}
       <footer className="footer">
         <div className="footer-content">
           <div className="footer-brand">

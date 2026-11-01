@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ProductCard from "../components/ProductCard";
+import { getProducts } from "../services/productService";
 
-function Products() {
+function Products({ onAddToCart }) {
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("All");
     const [minPrice, setMinPrice] = useState("");
@@ -10,55 +15,43 @@ function Products() {
     const [minRating, setMinRating] = useState("0");
     const [inStockOnly, setInStockOnly] = useState(false);
 
-    // Temporary product data
-    const products = [
-        {
-            id: 1,
-            name: "Wireless Headphones",
-            price: 45,
-            category: "Electronics",
-            rating: 4.5,
-            stock: 12,
-            image: "https://placehold.co/400x300?text=Headphones",
-        },
-        {
-            id: 2,
-            name: "Smart Watch",
-            price: 70,
-            category: "Electronics",
-            rating: 4.8,
-            stock: 0,
-            image: "https://placehold.co/400x300?text=Smart+Watch",
-        },
-        {
-            id: 3,
-            name: "Classic T-Shirt",
-            price: 20,
-            category: "Men's Clothing",
-            rating: 3.9,
-            stock: 25,
-            image: "https://placehold.co/400x300?text=T-Shirt",
-        },
-        {
-            id: 4,
-            name: "Elegant Necklace",
-            price: 35,
-            category: "Jewelry",
-            rating: 4.2,
-            stock: 8,
-            image: "https://placehold.co/400x300?text=Necklace",
-        },
-    ];
+    useEffect(() => {
+        async function loadProducts() {
+            try {
+                setLoading(true);
+                setError("");
 
-    // Filter products
+                console.log("[Products] Fetching products...");
+
+                const data = await getProducts();
+
+                console.log("[Products] Products loaded:", data.length);
+
+                setProducts(data);
+            } catch (error) {
+                console.error("[Products] Failed to load products:", error);
+                setError(error.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        loadProducts();
+    }, []);
+
     const filteredProducts = products.filter((product) => {
         const matchesSearch = product.name
             .toLowerCase()
             .includes(searchTerm.toLowerCase());
 
+        const categoryName =
+            typeof product.category === "object"
+                ? product.category?.name
+                : product.category;
+
         const matchesCategory =
             selectedCategory === "All" ||
-            product.category === selectedCategory;
+            categoryName === selectedCategory;
 
         const matchesMinPrice =
             minPrice === "" || product.price >= Number(minPrice);
@@ -66,10 +59,11 @@ function Products() {
         const matchesMaxPrice =
             maxPrice === "" || product.price <= Number(maxPrice);
 
-        const matchesRating = product.rating >= Number(minRating);
+        const matchesRating =
+            (product.rating ?? 0) >= Number(minRating);
 
         const matchesAvailability =
-            !inStockOnly || product.stock > 0;
+            !inStockOnly || (product.stock ?? 0) > 0;
 
         return (
             matchesSearch &&
@@ -81,7 +75,6 @@ function Products() {
         );
     });
 
-    // Sort filtered products
     const sortedProducts = [...filteredProducts].sort((a, b) => {
         switch (sortBy) {
             case "price-low":
@@ -111,6 +104,18 @@ function Products() {
         setInStockOnly(false);
     }
 
+    if (loading) {
+        return <main className="products-page">Loading products...</main>;
+    }
+
+    if (error) {
+        return (
+            <main className="products-page">
+                <p className="no-products">Error: {error}</p>
+            </main>
+        );
+    }
+
     return (
         <main className="products-page">
             <div className="section-header">
@@ -120,7 +125,6 @@ function Products() {
                 </div>
             </div>
 
-            {/* Search */}
             <div className="products-filters">
                 <input
                     type="text"
@@ -129,7 +133,6 @@ function Products() {
                     onChange={(event) => setSearchTerm(event.target.value)}
                 />
 
-                {/* Category */}
                 <select
                     value={selectedCategory}
                     onChange={(event) => setSelectedCategory(event.target.value)}
@@ -140,7 +143,6 @@ function Products() {
                     <option value="Jewelry">Jewelry</option>
                 </select>
 
-                {/* Price range */}
                 <input
                     type="number"
                     min="0"
@@ -157,7 +159,6 @@ function Products() {
                     onChange={(event) => setMaxPrice(event.target.value)}
                 />
 
-                {/* Sorting */}
                 <select
                     value={sortBy}
                     onChange={(event) => setSortBy(event.target.value)}
@@ -169,7 +170,6 @@ function Products() {
                     <option value="name-za">Name: Z to A</option>
                 </select>
 
-                {/* Rating */}
                 <select
                     value={minRating}
                     onChange={(event) => setMinRating(event.target.value)}
@@ -181,7 +181,6 @@ function Products() {
                 </select>
             </div>
 
-            {/* Availability */}
             <div className="availability-filter">
                 <label>
                     <input
@@ -192,7 +191,10 @@ function Products() {
                     Show available products only
                 </label>
 
-                <button className="reset-filters-button" onClick={resetFilters}>
+                <button
+                    className="reset-filters-button"
+                    onClick={resetFilters}
+                >
                     Reset Filters
                 </button>
             </div>
@@ -201,11 +203,14 @@ function Products() {
                 Showing {sortedProducts.length} products
             </p>
 
-            {/* Products */}
             <div className="products-grid">
                 {sortedProducts.length > 0 ? (
                     sortedProducts.map((product) => (
-                        <ProductCard key={product.id} product={product} />
+                        <ProductCard
+                            key={product._id}
+                            product={product}
+                            onAddToCart={onAddToCart}
+                        />
                     ))
                 ) : (
                     <p className="no-products">
