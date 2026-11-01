@@ -1,12 +1,66 @@
 import { useState } from "react";
-import { Routes, Route, Link } from "react-router";
+import { Routes, Route, Link, useNavigate } from "react-router";
 import Products from "./pages/Products";
 import ProductCard from "./components/ProductCard";
 import ProductDetails from "./pages/ProductDetails";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import "./App.css";
 
+function CartIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="21" r="1" />
+      <circle cx="20" cy="21" r="1" />
+      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+    </svg>
+  );
+}
+
+function HeartIcon({ filled = false }) {
+  return (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z" />
+    </svg>
+  );
+}
+
 function App() {
+  const navigate = useNavigate();
+
   const [cart, setCart] = useState([]);
+  const [favorites, setFavorites] = useState([]);
+
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem("marvetUser");
+
+    try {
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      localStorage.removeItem("marvetUser");
+      return null;
+    }
+  });
 
   function addToCart(product) {
     if (!product) {
@@ -31,12 +85,55 @@ function App() {
       }
 
       console.log("[Cart] Product added:", product.name);
-
       return [...currentCart, { ...product, quantity: 1 }];
     });
   }
 
-  const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+  function toggleFavorite(product) {
+    if (!product) return;
+
+    setFavorites((currentFavorites) => {
+      const alreadyFavorite = currentFavorites.some(
+        (item) => item._id === product._id
+      );
+
+      if (alreadyFavorite) {
+        console.log("[Favorites] Removed:", product.name);
+
+        return currentFavorites.filter(
+          (item) => item._id !== product._id
+        );
+      }
+
+      console.log("[Favorites] Added:", product.name);
+      return [...currentFavorites, product];
+    });
+  }
+
+  function isFavorite(product) {
+    return favorites.some((item) => item._id === product._id);
+  }
+
+  function handleLogin(userData, token) {
+    localStorage.setItem("marvetToken", token);
+    localStorage.setItem("marvetUser", JSON.stringify(userData));
+
+    setUser(userData);
+    navigate("/");
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("marvetToken");
+    localStorage.removeItem("marvetUser");
+
+    setUser(null);
+    navigate("/");
+  }
+
+  const cartCount = cart.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
 
   const featuredProducts = [
     {
@@ -91,11 +188,42 @@ function App() {
             Search
           </Link>
 
-          <Link to="/cart" className="nav-action-link">
-            Cart ({cartCount})
+          <Link to="/favorites" className="favorites-nav-link">
+            <HeartIcon filled={favorites.length > 0} />
+            <span>Favorites</span>
+
+            {favorites.length > 0 && (
+              <span className="favorites-count">
+                {favorites.length}
+              </span>
+            )}
           </Link>
 
-          <button>Login</button>
+          <Link to="/cart" className="cart-nav-button">
+            <CartIcon />
+            <span className="cart-nav-label">Cart</span>
+            <span className="cart-count-badge">{cartCount}</span>
+          </Link>
+
+          {user ? (
+            <div className="nav-user-actions">
+              <span className="nav-user-name">
+                Hi, {user.name}
+              </span>
+
+              <button
+                type="button"
+                className="login-button"
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <Link to="/login" className="login-button">
+              Login
+            </Link>
+          )}
         </div>
       </header>
 
@@ -151,6 +279,8 @@ function App() {
                       key={product._id}
                       product={product}
                       onAddToCart={addToCart}
+                      onToggleFavorite={toggleFavorite}
+                      isFavorite={isFavorite(product)}
                     />
                   ))}
                 </div>
@@ -161,12 +291,62 @@ function App() {
 
         <Route
           path="/products"
-          element={<Products onAddToCart={addToCart} />}
+          element={
+            <Products
+              onAddToCart={addToCart}
+              onToggleFavorite={toggleFavorite}
+              isFavorite={isFavorite}
+            />
+          }
         />
 
         <Route
           path="/products/:id"
-          element={<ProductDetails onAddToCart={addToCart} />}
+          element={
+            <ProductDetails
+              onAddToCart={addToCart}
+              onToggleFavorite={toggleFavorite}
+              isFavorite={isFavorite}
+            />
+          }
+        />
+
+        <Route
+          path="/favorites"
+          element={
+            <main className="favorites-page">
+              <div className="section-header">
+                <div>
+                  <p className="section-label">YOUR COLLECTION</p>
+                  <h1>My Favorites</h1>
+                </div>
+              </div>
+
+              {favorites.length === 0 ? (
+                <div className="empty-state">
+                  <HeartIcon />
+                  <h2>No favorites yet</h2>
+                  <p>Tap the heart on a product to save it here.</p>
+
+                  <Link to="/products" className="hero-button">
+                    Explore Products
+                  </Link>
+                </div>
+              ) : (
+                <div className="products-grid">
+                  {favorites.map((product) => (
+                    <ProductCard
+                      key={product._id}
+                      product={product}
+                      onAddToCart={addToCart}
+                      onToggleFavorite={toggleFavorite}
+                      isFavorite={isFavorite(product)}
+                    />
+                  ))}
+                </div>
+              )}
+            </main>
+          }
         />
 
         <Route
@@ -176,7 +356,15 @@ function App() {
               <h1>Your Shopping Cart</h1>
 
               {cart.length === 0 ? (
-                <p>Your cart is empty.</p>
+                <div className="empty-state">
+                  <CartIcon />
+                  <h2>Your cart is empty</h2>
+                  <p>Looks like you haven't added anything yet.</p>
+
+                  <Link to="/products" className="hero-button">
+                    Start Shopping
+                  </Link>
+                </div>
               ) : (
                 <div className="cart-items">
                   {cart.map((item) => (
@@ -193,15 +381,28 @@ function App() {
 
                   <h2>
                     Total: $
-                    {cart.reduce(
-                      (total, item) => total + item.price * item.quantity,
-                      0
-                    ).toFixed(2)}
+                    {cart
+                      .reduce(
+                        (total, item) =>
+                          total + item.price * item.quantity,
+                        0
+                      )
+                      .toFixed(2)}
                   </h2>
                 </div>
               )}
             </main>
           }
+        />
+
+        <Route
+          path="/login"
+          element={<Login onLogin={handleLogin} />}
+        />
+
+        <Route
+          path="/register"
+          element={<Register />}
         />
       </Routes>
 
