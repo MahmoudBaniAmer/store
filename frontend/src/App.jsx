@@ -6,7 +6,7 @@ import ProductDetails from "./pages/ProductDetails";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import "./App.css";
-
+import { createOrder } from "./services/orderService";
 function CartIcon() {
   return (
     <svg
@@ -129,7 +129,31 @@ function App() {
     setUser(null);
     navigate("/");
   }
+  async function handlePlaceOrder() {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
 
+    if (cart.length === 0) {
+      alert("Your cart is empty.");
+      return;
+    }
+
+    try {
+      for (const item of cart) {
+        await createOrder({
+          product: item._id,
+          quantity: item.quantity,
+        });
+      }
+
+      setCart([]);
+      alert("Your order has been placed successfully!");
+    } catch (error) {
+      alert(error.message || "Failed to place order.");
+    }
+  }
   const cartCount = cart.reduce(
     (total, item) => total + item.quantity,
     0
@@ -379,16 +403,23 @@ function App() {
                     </div>
                   ))}
 
-                  <h2>
-                    Total: $
-                    {cart
-                      .reduce(
-                        (total, item) =>
-                          total + item.price * item.quantity,
-                        0
-                      )
-                      .toFixed(2)}
-                  </h2>
+<h2>
+  Total: $
+  {cart
+    .reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    )
+    .toFixed(2)}
+</h2>
+
+<button
+  type="button"
+  className="hero-button"
+  onClick={handlePlaceOrder}
+>
+  Place Order
+</button>
                 </div>
               )}
             </main>
