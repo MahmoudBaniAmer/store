@@ -12,7 +12,7 @@ Marvet is an existing MERN e-commerce demo with a React/Vite single-page fronten
 
 1. Install backend dependencies:
 
-   ```powershell
+   ```bash
    cd backend
    npm install
    ```
@@ -20,13 +20,13 @@ Marvet is an existing MERN e-commerce demo with a React/Vite single-page fronten
 2. Configure `backend/.env` locally. Start from `backend/.env.example` only if a local file does not already exist. Never commit or share the local file.
 3. Start the backend from `backend`:
 
-   ```powershell
+   ```bash
    npm run dev
    ```
 
 4. In a separate terminal, install and start the frontend:
 
-   ```powershell
+   ```bash
    cd frontend
    npm install
    npm run dev
@@ -82,10 +82,9 @@ SMTP configuration is optional. Welcome and order confirmation emails are best-e
 
 Seed products and categories in a development database only:
 
-```powershell
+```bash
 cd backend
-$env:NODE_ENV = "development"
-npm run seed
+NODE_ENV=development npm run seed
 ```
 
 The seed is additive and idempotent: existing categories/products with the sample names are left unchanged. It creates no users, passwords, or administrator accounts. To create an admin in a development database, register a normal account, select the same development database in an authorized `mongosh` session, and promote only that account:
