@@ -7,8 +7,12 @@ function LocationMarker() {
     return <span className="delivery-location-marker" aria-label="Selected location">●</span>;
 }
 
-export default function DeliveryLocation() {
-    const [location, setLocation] = useState(null);
+export default function DeliveryLocation({
+    location,
+    onLocationChange,
+    shareLocation,
+    onShareLocationChange
+}) {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -23,10 +27,11 @@ export default function DeliveryLocation() {
         setLoading(true);
         navigator.geolocation.getCurrentPosition(
             ({ coords }) => {
-                setLocation({
+                onLocationChange({
                     lat: coords.latitude,
                     lng: coords.longitude,
                 });
+                onShareLocationChange(false);
                 setLoading(false);
             },
             (locationError) => {
@@ -46,7 +51,7 @@ export default function DeliveryLocation() {
     return (
         <section className="delivery-location" aria-labelledby="delivery-location-title">
             <h3 id="delivery-location-title">Delivery location (optional)</h3>
-            <p>Your location is used only in this page and is not saved with your order.</p>
+            <p>Your location is optional. It is not sent with your order unless you explicitly agree below.</p>
             <button type="button" className="admin-secondary" onClick={requestLocation} disabled={loading}>
                 {loading ? "Finding location…" : location ? "Update my location" : "Use my current location"}
             </button>
@@ -77,10 +82,24 @@ export default function DeliveryLocation() {
                             </a>
                         </p>
                     )}
+                    <label className="delivery-location-consent">
+                        <input
+                            type="checkbox"
+                            checked={shareLocation}
+                            onChange={(event) => onShareLocationChange(event.target.checked)}
+                        />
+                        <span>
+                            I agree to include these exact coordinates with my order for delivery.
+                            Authorized store administrators can view them.
+                        </span>
+                    </label>
                     <button
                         type="button"
                         className="delivery-location-clear"
-                        onClick={() => setLocation(null)}
+                        onClick={() => {
+                            onLocationChange(null);
+                            onShareLocationChange(false);
+                        }}
                     >
                         Clear location
                     </button>

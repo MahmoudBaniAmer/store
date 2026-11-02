@@ -9,6 +9,25 @@ const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 // Create Order
 const createOrder = async (req, res) => {
     try {
+        const deliveryLocation = req.body.deliveryLocation;
+        if (deliveryLocation !== undefined && deliveryLocation !== null) {
+            const { lat, lng } = deliveryLocation;
+            if (
+                typeof lat !== "number" ||
+                !Number.isFinite(lat) ||
+                lat < -90 ||
+                lat > 90 ||
+                typeof lng !== "number" ||
+                !Number.isFinite(lng) ||
+                lng < -180 ||
+                lng > 180
+            ) {
+                return res.status(400).json({
+                    message: "Delivery coordinates are invalid"
+                });
+            }
+        }
+
         const requestedItems = Array.isArray(req.body.items)
             ? req.body.items
             : req.body.product !== undefined || req.body.quantity !== undefined
@@ -112,9 +131,17 @@ const createOrder = async (req, res) => {
                 productsById = updatedProducts;
                 [order] = await Order.create(
                     [{
-                        items: normalizedItems,
+                        items: normalizedItems.map((item) => {
+                            const product = productsById.get(item.product);
+                            return {
+                                ...item,
+                                productName: product.name,
+                                unitPrice: product.price
+                            };
+                        }),
                         ...(normalizedItems.length === 1 ? normalizedItems[0] : {}),
-                        user: userId
+                        user: userId,
+                        ...(deliveryLocation ? { deliveryLocation } : {})
                     }],
                     { session }
                 );
@@ -138,7 +165,7 @@ const createOrder = async (req, res) => {
                 emailSent = true;
             }
         } catch (emailError) {
-            console.error("ORDER CONFIRMATION EMAIL ERROR:", emailError.message);
+            console.error("ORDER CONFIRMATION EMAIL ERROR:", emailError.name);
         }
 
         return res.status(201).json({
@@ -163,10 +190,9 @@ const createOrder = async (req, res) => {
             });
         }
 
-        console.error("CREATE ORDER ERROR:", error);
+        console.error("CREATE ORDER ERROR:", error.name);
         return res.status(500).json({
-            message: "Failed to create order",
-            error: error.message
+            message: "Failed to create order"
         });
     }
 };
@@ -197,11 +223,10 @@ const getOrders = async (req, res) => {
         return res.status(200).json(orders);
 
     } catch (error) {
-        console.error("GET ORDERS ERROR:", error);
+        console.error("GET ORDERS ERROR:", error.name);
 
         return res.status(500).json({
-            message: "Failed to get orders",
-            error: error.message
+            message: "Failed to get orders"
         });
     }
 };
@@ -238,6 +263,16 @@ const cancelOrder = async (req, res) => {
                     throw new Error("You are not allowed to cancel this order");
                 }
 
+                if (["shipped", "delivered"].includes(order.status)) {
+                    responseStatus = 409;
+                    throw new Error("Shipped or delivered orders cannot be cancelled");
+                }
+
+                if (order.status === "cancelled") {
+                    responseStatus = 409;
+                    throw new Error("This order has already been cancelled");
+                }
+
                 const items = order.items?.length
                     ? order.items
                     : [{ product: order.product, quantity: order.quantity }];
@@ -251,7 +286,8 @@ const cancelOrder = async (req, res) => {
                     await product.save({ session });
                 }
 
-                await Order.deleteOne({ _id: order._id }, { session });
+                order.status = "cancelled";
+                await order.save({ session });
             });
         } finally {
             await session.endSession();
@@ -271,17 +307,69 @@ const cancelOrder = async (req, res) => {
             });
         }
 
-        if (responseStatus === 500) console.error("CANCEL ORDER ERROR:", error);
+        if (responseStatus === 500) console.error("CANCEL ORDER ERROR:", error.name);
 
         return res.status(responseStatus).json({
-            message: responseStatus === 500 ? "Failed to cancel order" : error.message,
-            ...(responseStatus === 500 ? { error: error.message } : {})
+            message: responseStatus === 500 ? "Failed to cancel order" : error.message
         });
+    }
+};
+
+const updateOrderStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!isValidId(id)) {
+            return res.status(400).json({ message: "Invalid order ID" });
+        }
+
+        if (!Order.schema.path("status").enumValues.includes(status)) {
+            return res.status(400).json({
+                message: "Status must be pending, processing, shipped, or delivered"
+            });
+        }
+
+        if (status === "cancelled") {
+            return res.status(400).json({
+                message: "Use the cancellation action to cancel an order"
+            });
+        }
+
+        const existingOrder = await Order.findById(id).select("status");
+        if (!existingOrder) {
+            return res.status(404).json({ message: "Order not found" });
+        }
+        if (existingOrder.status === "cancelled") {
+            return res.status(409).json({ message: "Cancelled orders cannot be updated" });
+        }
+
+        const order = await Order.findByIdAndUpdate(
+            id,
+            { status },
+            { new: true, runValidators: true }
+        )
+            .populate("product")
+            .populate("items.product")
+            .populate("user", "name email");
+
+        if (!order) {
+            return res.status(404).json({ message: "Order not found" });
+        }
+
+        return res.status(200).json({
+            message: "Order status updated successfully",
+            order
+        });
+    } catch (error) {
+        console.error("UPDATE ORDER STATUS ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to update order status" });
     }
 };
 
 module.exports = {
     createOrder,
     getOrders,
-    cancelOrder
+    cancelOrder,
+    updateOrderStatus
 };

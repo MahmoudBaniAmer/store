@@ -40,10 +40,10 @@ function ProductCard({
 
     // Support both backend stock formats:
     // inStock: true/false OR stock: number
-    const isAvailable =
-        typeof product.inStock === "boolean"
-            ? product.inStock
-            : Number(product.stock ?? 0) > 0;
+    const hasStockValue = product.stock !== undefined && product.stock !== null;
+    const isAvailable = hasStockValue
+        ? Number(product.stock) > 0
+        : product.inStock === true;
 
     const productPrice = Number(product.price ?? 0);
 

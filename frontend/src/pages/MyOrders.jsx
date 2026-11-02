@@ -29,7 +29,9 @@ function MyOrders() {
         try {
             setBusyOrderId(orderId);
             await cancelOrder(orderId);
-            setOrders((current) => current.filter((order) => order._id !== orderId));
+            setOrders((current) => current.map((order) => (
+                order._id === orderId ? { ...order, status: "cancelled" } : order
+            )));
         } catch (err) {
             window.alert(err.message || "Failed to cancel order");
         } finally {
@@ -59,32 +61,48 @@ function MyOrders() {
                             ? order.items
                             : [{ product: order.product, quantity: order.quantity }];
                         const total = items.reduce((sum, item) => (
-                            item.product?.price != null
-                                ? sum + Number(item.product.price) * item.quantity
+                            item.unitPrice != null || item.product?.price != null
+                                ? sum + Number(item.unitPrice ?? item.product.price) * item.quantity
                                 : sum
                         ), 0);
 
                         return (
                             <article className="my-order-card" key={order._id}>
-                                <h3>{items.length === 1 ? items[0].product?.name || "Product no longer available" : `Order (${items.length} items)`}</h3>
+                                <h3>{items.length === 1 ? items[0].product?.name || items[0].productName || "Product no longer available" : `Order (${items.length} items)`}</h3>
                                 {items.map((item, index) => (
                                     <p key={item.product?._id || index}>
-                                        {item.product?.name || "Product no longer available"} — Quantity: {item.quantity}
+                                        {item.product?.name || item.productName || "Product no longer available"} — Quantity: {item.quantity}
                                     </p>
                                 ))}
-                                {items.every((item) => item.product?.price != null) && (
+                                {items.every((item) => item.unitPrice != null || item.product?.price != null) && (
                                     <p>Price: ${total.toFixed(2)}</p>
                                 )}
                                 <p>Placed: {order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</p>
+                                <p>Status: {order.status || "pending"}</p>
+                                {order.deliveryLocation && (
+                                    <a
+                                        href={`https://www.google.com/maps/search/?api=1&query=${order.deliveryLocation.lat},${order.deliveryLocation.lng}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        View shared delivery location
+                                    </a>
+                                )}
                                 <p className="order-id">Order ID: {order._id}</p>
-                                <button
-                                    type="button"
-                                    className="cancel-order-button"
-                                    disabled={busyOrderId === order._id}
-                                    onClick={() => handleCancelOrder(order._id)}
-                                >
-                                    {busyOrderId === order._id ? "Cancelling..." : "Cancel Order"}
-                                </button>
+                                {["shipped", "delivered"].includes(order.status) ? (
+                                    <p>This order can no longer be cancelled.</p>
+                                ) : order.status === "cancelled" ? (
+                                    <p>This order was cancelled.</p>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className="cancel-order-button"
+                                        disabled={busyOrderId === order._id}
+                                        onClick={() => handleCancelOrder(order._id)}
+                                    >
+                                        {busyOrderId === order._id ? "Cancelling..." : "Cancel Order"}
+                                    </button>
+                                )}
                             </article>
                         );
                     })}

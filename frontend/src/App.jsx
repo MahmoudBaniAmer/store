@@ -124,6 +124,8 @@ function App() {
   const storageScope = getStorageScope(user);
   const [cart, setCart] = useState(() => readStoredItems("marvetCart", storageScope));
   const [favorites, setFavorites] = useState(() => readStoredItems("marvetFavorites", storageScope));
+  const [deliveryLocation, setDeliveryLocation] = useState(null);
+  const [shareDeliveryLocation, setShareDeliveryLocation] = useState(false);
 
   useEffect(() => {
     saveStoredItems("marvetCart", storageScope, cart);
@@ -159,11 +161,9 @@ function App() {
             : item
         );
 
-        console.log("[Cart] Quantity increased:", product.name);
         return updatedCart;
       }
 
-      console.log("[Cart] Product added:", product.name);
       return [...currentCart, { ...product, quantity: 1 }];
     });
   }
@@ -188,14 +188,11 @@ function App() {
       );
 
       if (alreadyFavorite) {
-        console.log("[Favorites] Removed:", product.name);
-
         return currentFavorites.filter(
           (item) => item._id !== product._id
         );
       }
 
-      console.log("[Favorites] Added:", product.name);
       return [...currentFavorites, product];
     });
   }
@@ -205,6 +202,8 @@ function App() {
   }
 
   function handleLogin(userData, token) {
+    setDeliveryLocation(null);
+    setShareDeliveryLocation(false);
     const currentScope = getStorageScope(user);
     const nextScope = getStorageScope(userData);
 
@@ -224,6 +223,8 @@ function App() {
   }
 
   function handleLogout() {
+    setDeliveryLocation(null);
+    setShareDeliveryLocation(false);
     const currentScope = getStorageScope(user);
     const guestCart = readStoredItems("marvetCart", "guest");
     const guestFavorites = readStoredItems("marvetFavorites", "guest");
@@ -255,9 +256,12 @@ function App() {
           product: item._id,
           quantity: item.quantity,
         })),
+        ...(shareDeliveryLocation && deliveryLocation ? { deliveryLocation } : {}),
       });
 
       setCart([]);
+      setDeliveryLocation(null);
+      setShareDeliveryLocation(false);
       alert("Your order has been placed successfully!");
     } catch (error) {
       alert(error.message || "Failed to place order.");
@@ -407,6 +411,7 @@ function App() {
           path="/products/:id"
           element={
             <ProductDetails
+              user={user}
               onAddToCart={addToCart}
               onToggleFavorite={toggleFavorite}
               isFavorite={isFavorite}
@@ -472,7 +477,15 @@ function App() {
                 <div className="cart-items">
                   {cart.map((item) => (
                     <div className="cart-item" key={item._id}>
-                      <img src={item.image} alt={item.name} />
+                      <img
+                        src={item.image || "https://placehold.co/400x300?text=Product"}
+                        alt={item.name || "Product"}
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src =
+                            "https://placehold.co/400x300?text=Image+Unavailable";
+                        }}
+                      />
 
                       <div>
                         <h3>{item.name}</h3>
@@ -542,7 +555,12 @@ function App() {
                     <p>Cash on delivery. This demo does not collect or process payment information.</p>
                   </div>
 
-                  <DeliveryLocation />
+                  <DeliveryLocation
+                    location={deliveryLocation}
+                    onLocationChange={setDeliveryLocation}
+                    shareLocation={shareDeliveryLocation}
+                    onShareLocationChange={setShareDeliveryLocation}
+                  />
 
                   <button
                     type="button"
@@ -556,7 +574,10 @@ function App() {
             </main>
           }
         />
-        <Route path="/my-orders" element={<MyOrders />} />
+        <Route
+          path="/my-orders"
+          element={user ? <MyOrders /> : <Navigate to="/login" replace />}
+        />
         <Route
           path="/admin"
           element={user?.role === "admin"

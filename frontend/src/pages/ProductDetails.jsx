@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { getProductById } from "../services/productService";
-import { getProductReviews, createProductReview } from "../services/reviewService";
+import {
+    getProductReviews,
+    createProductReview,
+    updateProductReview,
+    deleteProductReview
+} from "../services/reviewService";
 
 function HeartIcon({ filled = false }) {
     return (
@@ -15,7 +20,7 @@ function Stars({ value = 0 }) {
     return <span className="review-stars" aria-label={`${value} out of 5 stars`}>{"★".repeat(Math.round(value))}{"☆".repeat(5 - Math.round(value))}</span>;
 }
 
-function ProductDetails({ onAddToCart, onToggleFavorite, isFavorite = () => false }) {
+function ProductDetails({ user, onAddToCart, onToggleFavorite, isFavorite = () => false }) {
     const { id } = useParams();
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -28,6 +33,7 @@ function ProductDetails({ onAddToCart, onToggleFavorite, isFavorite = () => fals
     const [rating, setRating] = useState("5");
     const [comment, setComment] = useState("");
     const [submittingReview, setSubmittingReview] = useState(false);
+    const [editingReviewId, setEditingReviewId] = useState("");
 
     useEffect(() => {
         let active = true;
@@ -63,12 +69,33 @@ function ProductDetails({ onAddToCart, onToggleFavorite, isFavorite = () => fals
         setReviewMessage(""); setReviewError("");
         try {
             setSubmittingReview(true);
-            await createProductReview(id, { rating: Number(rating), comment });
+            if (editingReviewId) {
+                await updateProductReview(id, editingReviewId, { rating: Number(rating), comment });
+            } else {
+                await createProductReview(id, { rating: Number(rating), comment });
+            }
             setComment(""); setRating("5");
-            setReviewMessage("Your review was submitted successfully.");
+            setReviewMessage(editingReviewId ? "Your review was updated." : "Your review was submitted successfully.");
+            setEditingReviewId("");
             await loadReviews();
         } catch (err) { setReviewError(err.message || "Could not submit your review."); }
         finally { setSubmittingReview(false); }
+    }
+
+    async function handleDeleteReview(reviewId) {
+        if (!window.confirm("Delete this review?")) return;
+        try {
+            await deleteProductReview(id, reviewId);
+            setReviewMessage("Review deleted.");
+            if (editingReviewId === reviewId) {
+                setEditingReviewId("");
+                setRating("5");
+                setComment("");
+            }
+            await loadReviews();
+        } catch (err) {
+            setReviewError(err.message || "Could not delete review.");
+        }
     }
 
     if (loading) return <main className="product-details-page"><p>Loading product...</p></main>;
@@ -78,7 +105,8 @@ function ProductDetails({ onAddToCart, onToggleFavorite, isFavorite = () => fals
     const productPrice = Number(product.price ?? 0);
     const categoryName = typeof product.category === "object" ? product.category?.name : product.category;
     const stockQuantity = Number(product.stock ?? 0);
-    const isAvailable = typeof product.inStock === "boolean" ? product.inStock : stockQuantity > 0;
+    const hasStockValue = product.stock !== undefined && product.stock !== null;
+    const isAvailable = hasStockValue ? stockQuantity > 0 : product.inStock === true;
     const productIsFavorite = isFavorite?.(product) ?? false;
     const productImage = product.image || "https://placehold.co/600x450?text=Product";
 
@@ -108,19 +136,31 @@ function ProductDetails({ onAddToCart, onToggleFavorite, isFavorite = () => fals
                 {reviewMessage && <p className="review-message success">{reviewMessage}</p>}
                 {reviewError && <p className="review-message error">{reviewError}</p>}
                 <form className="review-form" onSubmit={handleReviewSubmit}>
-                    <h3>Share your experience</h3>
+                    <h3>{editingReviewId ? "Edit your review" : "Share your experience"}</h3>
                     <label htmlFor="review-rating">Your rating</label>
                     <select id="review-rating" value={rating} onChange={(event) => setRating(event.target.value)} required><option value="5">★★★★★ — Excellent</option><option value="4">★★★★☆ — Good</option><option value="3">★★★☆☆ — Average</option><option value="2">★★☆☆☆ — Below average</option><option value="1">★☆☆☆☆ — Poor</option></select>
                     <label htmlFor="review-comment">Your comment</label>
                     <textarea id="review-comment" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="What did you think about this product?" rows="4" maxLength="1000" required />
                     <small>{comment.length}/1000 characters</small>
-                    <button type="submit" disabled={submittingReview}>{submittingReview ? "Submitting…" : "Submit review"}</button>
+                    <button type="submit" disabled={submittingReview}>{submittingReview ? "Saving…" : editingReviewId ? "Save review" : "Submit review"}</button>
+                    {editingReviewId && <button type="button" onClick={() => { setEditingReviewId(""); setRating("5"); setComment(""); }}>Cancel edit</button>}
                 </form>
                 <div className="review-list">
                     {reviewLoading ? <p>Loading reviews…</p> : reviews.length === 0 ? <p className="review-message">No reviews yet. Be the first to share your feedback.</p> : reviews.map((review) => (
                         <article className="review-item" key={review._id}>
                             <div className="review-item-header"><div><strong className="review-author">{review.user?.name || "Marvet customer"}</strong><div><Stars value={review.rating} /></div></div><time className="review-date" dateTime={review.createdAt}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ""}</time></div>
                             <p className="review-comment">{review.comment}</p>
+                            {(user?.role === "admin" || String(review.user?._id) === String(user?.id || user?._id)) && (
+                                <div className="review-actions">
+                                    <button type="button" onClick={() => {
+                                        setEditingReviewId(review._id);
+                                        setRating(String(review.rating));
+                                        setComment(review.comment || "");
+                                        setReviewError("");
+                                    }}>Edit</button>
+                                    <button type="button" onClick={() => handleDeleteReview(review._id)}>Delete</button>
+                                </div>
+                            )}
                         </article>
                     ))}
                 </div>

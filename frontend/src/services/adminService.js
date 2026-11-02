@@ -33,6 +33,16 @@ export const adminGetCategories = () => fetch(`${API_BASE}/categories`).then(asy
 });
 export const adminGetOrders = () => request("/orders");
 export const adminGetAnalytics = () => request("/api/admin/analytics");
+export const adminGetUsers = () => request("/api/auth/users");
+export const adminUpdateUserRole = (id, role) => request(`/api/auth/users/${id}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+});
+export const adminUpdateOrderStatus = (id, status) => request(`/orders/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+});
+export const adminCancelOrder = (id) => request(`/orders/${id}`, { method: "DELETE" });
 export const adminCreateProduct = (body) => request("/products", { method: "POST", body: JSON.stringify(body) });
 export const adminUpdateProduct = (id, body) => request(`/products/${id}`, { method: "PUT", body: JSON.stringify(body) });
 export const adminDeleteProduct = (id) => request(`/products/${id}`, { method: "DELETE" });

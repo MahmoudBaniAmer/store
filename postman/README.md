@@ -28,7 +28,7 @@ This folder stores the backend route smoke tests for the Marvet demo store.
 
 ## Notes
 
-- These requests are template-based and intentionally do not include real credentials or secrets.
+- These requests are template-based and intentionally do not include real credentials or secrets. The collection includes write requests (registration, catalog/review/order changes, and cancellation); do not run the full collection against a shared or valuable database. Review each request and use only a dedicated disposable local database.
 - Live API testing requires a running backend and a database that supports atomic transactions for checkout and cancellation.
 - If the database is not configured for replica-set transactions, order creation and cancellation should return a 503 response instead of completing a write.
-- The collection is meant for safe smoke testing only; it is not a substitute for production validation or a stored database dump.
+- The collection is a smoke-test template, not safe to run wholesale against a shared or valuable database; it is not a substitute for production validation or a stored database dump.

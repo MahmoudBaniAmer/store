@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
-const authentication = (req, res, next) => {
+const authentication = async (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
@@ -30,8 +31,28 @@ const authentication = (req, res, next) => {
         });
     }
 
-    req.token = decoded;
-    next();
+    if (!decoded.id) {
+        return res.status(401).json({
+            message: "Invalid token"
+        });
+    }
+
+    try {
+        const user = await User.findById(decoded.id).select("role").lean();
+        if (!user) {
+            return res.status(401).json({
+                message: "Account no longer exists"
+            });
+        }
+
+        req.token = { ...decoded, role: user.role };
+        return next();
+    } catch (error) {
+        console.error("AUTHENTICATION ACCOUNT LOOKUP ERROR:", error.name);
+        return res.status(503).json({
+            message: "Unable to verify account permissions"
+        });
+    }
 };
 
 module.exports = authentication;

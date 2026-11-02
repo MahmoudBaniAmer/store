@@ -38,9 +38,11 @@ const createProduct = async (req, res) => {
 
         res.status(201).json(product);
     } catch (error) {
-        res.status(400).json({
-            message: error.message,
-        });
+        if (["ValidationError", "CastError"].includes(error.name)) {
+            return res.status(400).json({ message: error.message });
+        }
+        console.error("CREATE PRODUCT ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to create product" });
     }
 };
 
@@ -73,9 +75,8 @@ const getProducts = async (req, res) => {
 
         res.status(200).json(productsWithRatings);
     } catch (error) {
-        res.status(500).json({
-            message: error.message,
-        });
+        console.error("GET PRODUCTS ERROR:", error.name);
+        res.status(500).json({ message: "Failed to get products" });
     }
 };
 
@@ -92,16 +93,35 @@ const getProductById = async (req, res) => {
 
         res.status(200).json(product);
     } catch (error) {
-        res.status(400).json({
-            message: error.message,
-        });
+        if (error.name === "CastError") {
+            return res.status(400).json({ message: "Invalid product ID" });
+        }
+        console.error("GET PRODUCT ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to get product" });
     }
 };
 
 // Update Product
 const updateProduct = async (req, res) => {
     try {
-        const updates = { ...req.body };
+        if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+            return res.status(400).json({
+                message: "Product updates must be provided as an object"
+            });
+        }
+
+        const allowedFields = ["name", "description", "price", "category", "image", "stock"];
+        const updates = Object.fromEntries(
+            allowedFields
+                .filter((field) => req.body[field] !== undefined)
+                .map((field) => [field, req.body[field]])
+        );
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({
+                message: "At least one supported product field must be provided"
+            });
+        }
 
         if (updates.price !== undefined) {
             updates.price = Number(updates.price);
@@ -142,9 +162,11 @@ const updateProduct = async (req, res) => {
 
         res.status(200).json(product);
     } catch (error) {
-        res.status(400).json({
-            message: error.message,
-        });
+        if (["ValidationError", "CastError"].includes(error.name)) {
+            return res.status(400).json({ message: error.message });
+        }
+        console.error("UPDATE PRODUCT ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to update product" });
     }
 };
 
@@ -163,9 +185,11 @@ const deleteProduct = async (req, res) => {
             message: "Product deleted successfully",
         });
     } catch (error) {
-        res.status(400).json({
-            message: error.message,
-        });
+        if (error.name === "CastError") {
+            return res.status(400).json({ message: "Invalid product ID" });
+        }
+        console.error("DELETE PRODUCT ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to delete product" });
     }
 };
 

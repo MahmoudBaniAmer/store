@@ -93,7 +93,7 @@ async function seed() {
 
 seed()
     .catch((error) => {
-        console.error("Seed failed:", error.message);
+        console.error("Seed failed:", error.name);
         process.exitCode = 1;
     })
     .finally(async () => {

@@ -2,13 +2,86 @@ const mongoose = require("mongoose");
 const Review = require("../models/Review");
 const Product = require("../models/Product");
 
+function canManageReview(review, req) {
+    const userId = req.token?.id || req.token?._id || req.token?.userId;
+    return req.token?.role === "admin" || review.user.toString() === userId;
+}
+
 const getProductReviews = async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.productId)) return res.status(400).json({ message: "Invalid product ID" });
         const reviews = await Review.find({ product: req.params.productId }).populate("user", "name").sort({ createdAt: -1 });
         const averageRating = reviews.length ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0;
         return res.status(200).json({ reviews, averageRating: Number(averageRating.toFixed(1)), reviewCount: reviews.length });
-    } catch (error) { return res.status(500).json({ message: error.message }); }
+    } catch (error) {
+        console.error("GET PRODUCT REVIEWS ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to get product reviews" });
+    }
+};
+
+const updateProductReview = async (req, res) => {
+    try {
+        const { productId, reviewId } = req.params;
+        if (
+            !mongoose.Types.ObjectId.isValid(productId) ||
+            !mongoose.Types.ObjectId.isValid(reviewId)
+        ) {
+            return res.status(400).json({ message: "Invalid product or review ID" });
+        }
+
+        const review = await Review.findOne({ _id: reviewId, product: productId });
+        if (!review) return res.status(404).json({ message: "Review not found" });
+        if (!canManageReview(review, req)) {
+            return res.status(403).json({ message: "You cannot edit this review" });
+        }
+
+        const { rating, comment } = req.body;
+        const numericRating = Number(rating);
+        if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+            return res.status(400).json({ message: "Rating must be between 1 and 5" });
+        }
+        if (typeof comment !== "string" || !comment.trim() || comment.trim().length > 1000) {
+            return res.status(400).json({
+                message: "Comment is required (maximum 1000 characters)"
+            });
+        }
+
+        review.rating = numericRating;
+        review.comment = comment.trim();
+        await review.save();
+        await review.populate("user", "name");
+        return res.status(200).json({ message: "Review updated", review });
+    } catch (error) {
+        if (error.name === "ValidationError") {
+            return res.status(400).json({ message: error.message });
+        }
+        console.error("UPDATE PRODUCT REVIEW ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to update review" });
+    }
+};
+
+const deleteProductReview = async (req, res) => {
+    try {
+        const { productId, reviewId } = req.params;
+        if (
+            !mongoose.Types.ObjectId.isValid(productId) ||
+            !mongoose.Types.ObjectId.isValid(reviewId)
+        ) {
+            return res.status(400).json({ message: "Invalid product or review ID" });
+        }
+
+        const review = await Review.findOne({ _id: reviewId, product: productId });
+        if (!review) return res.status(404).json({ message: "Review not found" });
+        if (!canManageReview(review, req)) {
+            return res.status(403).json({ message: "You cannot delete this review" });
+        }
+
+        await review.deleteOne();
+        return res.status(200).json({ message: "Review deleted" });
+    } catch (error) {
+        console.error("DELETE PRODUCT REVIEW ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to delete review" });
+    }
 };
 
 const createProductReview = async (req, res) => {
@@ -28,7 +101,13 @@ const createProductReview = async (req, res) => {
     } catch (error) {
         if (error.code === 11000) return res.status(409).json({ message: "You have already reviewed this product" });
         if (error.name === "ValidationError") return res.status(400).json({ message: error.message });
-        return res.status(500).json({ message: error.message });
+        console.error("CREATE PRODUCT REVIEW ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to create review" });
     }
 };
-module.exports = { getProductReviews, createProductReview };
+module.exports = {
+    getProductReviews,
+    createProductReview,
+    updateProductReview,
+    deleteProductReview
+};

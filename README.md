@@ -2,11 +2,21 @@
 
 Marvet is an existing MERN e-commerce demo with a React/Vite single-page frontend and an Express/Mongoose backend. It includes email/password and optional Google sign-in, catalog and category management, local browser cart/favorites, demo checkout, reviews, email notifications, an admin dashboard, maps, and a Gemini-powered store assistant.
 
+The catalog supports search, filtering, sorting, and paginated results. Customers can manage their own reviews and view order status; administrators can manage users, product/category records, order statuses, and cancellations. Orders remain in the customer's history after cancellation, and cancelled orders are excluded from sales analytics. Categories that still have products cannot be deleted. Checkout records product name and price snapshots for order history and sales analytics. Optional delivery coordinates are attached to an order only after the customer explicitly consents.
+
 ## Requirements
 
 - Node.js 20.19 or newer
 - npm
 - MongoDB. Checkout and order cancellation require a replica set or sharded cluster because they use transactions.
+
+## Project structure
+
+```text
+backend/   Express API, Mongoose models, controllers, routes, middleware, and seed script
+frontend/  React/Vite application, pages, components, and API services
+postman/   API collection, local environment template, and usage notes
+```
 
 ## Install and run
 
@@ -29,12 +39,25 @@ Marvet is an existing MERN e-commerce demo with a React/Vite single-page fronten
    ```bash
    cd frontend
    npm install
-   npm run dev
+   npm run dev -- --host 127.0.0.1 --port 5175 --strictPort
    ```
 
-5. Open the Vite URL printed in the frontend terminal. The backend defaults to port 5000; set `PORT` to use another port and configure `VITE_API_BASE_URL` to match.
+5. Open `http://127.0.0.1:5175`. The frontend API base defaults to `http://localhost:5000`; no Vite proxy is configured. If the backend uses another port, set `PORT` and `VITE_API_BASE_URL` to matching values. In local development, the backend allows localhost and 127.0.0.1 origins on any port.
 
 For production frontend assets, run `npm run build` in `frontend`. The backend start command is `npm start` in `backend`.
+
+## Main API routes
+
+- `GET /products`, `GET /products/:id` — public product catalog and details.
+- `GET /categories` — public category list.
+- `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/google` — authentication.
+- `/orders` — authenticated order creation/history; administrators can manage order status.
+- `/reviews/:productId` — public review listing; authenticated users can manage their own reviews.
+- `/api/admin/analytics` — administrator-only dashboard data.
+- `POST /api/chat` — optional Gemini-powered store assistant.
+
+Product/category writes and user-role management are administrator-only. Import the Postman collection for request bodies and additional endpoints.
+Authentication endpoints are rate limited per backend process: registration allows 5 attempts per hour, while password and Google sign-in share a limit of 10 attempts per 15 minutes per client IP. Use a shared rate-limit store if deploying multiple backend instances.
 
 ## MongoDB and demo checkout
 
@@ -68,7 +91,7 @@ Create a Google OAuth web client. Configure the development and production JavaS
 
 ### Maps and location
 
-Enable the Google Maps JavaScript API and configure a browser key in `VITE_GOOGLE_MAPS_API_KEY`. Restrict the key to the required website referrers and API. Location permission is requested only after the customer presses the optional location button in the cart. Coordinates stay in page memory and are not submitted with the order. Without a maps key, the page offers an explicit Google Maps link after the customer chooses to share their location.
+Enable the Google Maps JavaScript API and configure a browser key in `VITE_GOOGLE_MAPS_API_KEY`. Restrict the key to the required website referrers and API. Location permission is requested only after the customer presses the optional location button in the cart. Coordinates stay in page memory and are not submitted with the order unless the customer explicitly checks the delivery-location consent box. Consented coordinates are saved with that order for delivery and are visible to the customer and authorized store administrators. Without a maps key, the page offers an explicit Google Maps link after the customer chooses to share their location.
 
 ### Gemini store assistant
 
@@ -114,3 +137,7 @@ Import `postman/Marvet_API_Tests.postman_collection.json` and `postman/Marvet_Lo
 ## Validation
 
 Run backend JavaScript syntax checks with `node --check` on the backend source files. Run the frontend production build with `npm run build` and lint with `npm run lint` from `frontend`. The backend package currently has no automated test suite configured. External Google, Gemini, SMTP, MongoDB, and browser-location integrations require local credentials/infrastructure and must be tested separately.
+
+## Deployment notes
+
+Set `NODE_ENV=production`, a strong backend-only `SECRET`, `DATABASE_URI`, and exact comma-separated frontend origins in `CLIENT_ORIGINS`. Configure HTTPS, restrict browser API keys by origin and API, and keep backend environment files outside source control and deployment artifacts. Use a MongoDB replica set or sharded cluster for atomic checkout and cancellation; no real payment processing is included.

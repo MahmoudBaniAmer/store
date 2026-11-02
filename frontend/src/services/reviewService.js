@@ -21,3 +21,28 @@ export async function createProductReview(productId, review) {
     if (!response.ok) throw new Error(data.message || "Could not submit review");
     return data;
 }
+
+export async function updateProductReview(productId, reviewId, review) {
+    const token = localStorage.getItem("marvetToken");
+    if (!token) throw new Error("Please log in to edit a review.");
+    const response = await fetch(`${API_URL}/${productId}/${reviewId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(review),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || "Could not update review");
+    return data;
+}
+
+export async function deleteProductReview(productId, reviewId) {
+    const token = localStorage.getItem("marvetToken");
+    if (!token) throw new Error("Please log in to delete a review.");
+    const response = await fetch(`${API_URL}/${productId}/${reviewId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || "Could not delete review");
+    return data;
+}

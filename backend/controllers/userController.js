@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require("google-auth-library");
@@ -27,17 +28,29 @@ const createUser = async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        // Check required fields
-        if (!name || !email || !password) {
+        if (
+            typeof name !== "string" ||
+            typeof email !== "string" ||
+            typeof password !== "string" ||
+            !name.trim() ||
+            !email.trim() ||
+            password.length < 6
+        ) {
             return res.status(400).json({
-                message: "Name, email and password are required"
+                message: "A name, valid email, and password of at least 6 characters are required"
             });
         }
 
-        // Normalize email
         const normalizedEmail = email.trim().toLowerCase();
+        if (
+            normalizedEmail.length > 320 ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
+        ) {
+            return res.status(400).json({
+                message: "A valid email address is required"
+            });
+        }
 
-        // Check if email already exists
         const existingUser = await User.findOne({
             email: normalizedEmail
         });
@@ -48,7 +61,6 @@ const createUser = async (req, res) => {
             });
         }
 
-        // Create new user
         const newUser = new User({
             name: name.trim(),
             email: normalizedEmail,
@@ -63,7 +75,7 @@ const createUser = async (req, res) => {
             await sendWelcomeEmail(newUser);
             emailSent = true;
         } catch (emailError) {
-            console.error("Welcome email failed:", emailError.message);
+            console.error("Welcome email failed:", emailError.name);
         }
 
         return res.status(201).json({
@@ -78,9 +90,14 @@ const createUser = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(500).json({
-            message: error.message
-        });
+        if (error.code === 11000) {
+            return res.status(409).json({
+                message: "Email already in use"
+            });
+        }
+
+        console.error("REGISTER USER ERROR:", error.name);
+        return res.status(500).json({ message: "Registration failed" });
     }
 };
 
@@ -89,14 +106,17 @@ const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Check required fields
-        if (!email || !password) {
+        if (
+            typeof email !== "string" ||
+            typeof password !== "string" ||
+            !email.trim() ||
+            !password
+        ) {
             return res.status(400).json({
                 message: "Email and password are required"
             });
         }
 
-        // Normalize email
         const normalizedEmail = email.trim().toLowerCase();
 
         // Find user
@@ -128,9 +148,8 @@ const login = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(500).json({
-            message: error.message
-        });
+        console.error("LOGIN ERROR:", error.name);
+        return res.status(500).json({ message: "Login failed" });
     }
 };
 
@@ -197,7 +216,7 @@ const googleLogin = async (req, res) => {
                 await sendWelcomeEmail(user);
                 emailSent = true;
             } catch (emailError) {
-                console.error("Welcome email failed:", emailError.message);
+                console.error("Welcome email failed:", emailError.name);
             }
         }
 
@@ -214,7 +233,7 @@ const googleLogin = async (req, res) => {
             });
         }
 
-        console.error("GOOGLE AUTHENTICATION ERROR:", error.message);
+        console.error("GOOGLE AUTHENTICATION ERROR:", error.name);
         return res.status(401).json({
             message: "Google sign-in could not be verified"
         });
@@ -229,9 +248,8 @@ const getUsers = async (req, res) => {
         return res.status(200).json(users);
 
     } catch (error) {
-        return res.status(500).json({
-            message: error.message
-        });
+        console.error("GET USERS ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to get users" });
     }
 };
 // Update User Role (Admin Only)
@@ -240,10 +258,22 @@ const updateUserRole = async (req, res) => {
         const { role } = req.body;
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: "Invalid user ID"
+            });
+        }
+
         // Validate role
         if (!["user", "admin"].includes(role)) {
             return res.status(400).json({
                 message: "Role must be either user or admin"
+            });
+        }
+
+        if (id === req.token?.id && role !== "admin") {
+            return res.status(400).json({
+                message: "You cannot remove your own administrator role"
             });
         }
 
@@ -271,9 +301,8 @@ const updateUserRole = async (req, res) => {
         });
 
     } catch (error) {
-        return res.status(500).json({
-            message: error.message
-        });
+        console.error("UPDATE USER ROLE ERROR:", error.name);
+        return res.status(500).json({ message: "Failed to update user role" });
     }
 };
 // Export Controllers

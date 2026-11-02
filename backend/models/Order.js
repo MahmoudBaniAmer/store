@@ -8,11 +8,29 @@ const orderItemSchema = new mongoose.Schema(
             required: true
         },
 
+        productName: {
+            type: String,
+            trim: true
+        },
+
+        unitPrice: {
+            type: Number,
+            min: 0
+        },
+
         quantity: {
             type: Number,
             required: true,
             min: 1
         }
+    },
+    { _id: false }
+);
+
+const deliveryLocationSchema = new mongoose.Schema(
+    {
+        lat: { type: Number, required: true, min: -90, max: 90 },
+        lng: { type: Number, required: true, min: -180, max: 180 }
     },
     { _id: false }
 );
@@ -33,6 +51,17 @@ const orderSchema = new mongoose.Schema(
         quantity: {
             type: Number,
             min: 1
+        },
+
+        status: {
+            type: String,
+            enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
+            default: "pending"
+        },
+
+        deliveryLocation: {
+            type: deliveryLocationSchema,
+            default: undefined
         },
 
         user: {
