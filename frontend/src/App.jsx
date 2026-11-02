@@ -418,12 +418,52 @@ function App() {
                         <h3>{item.name}</h3>
                         <p>Price: ${item.price}</p>
                         <div className="cart-quantity-controls">
-                          <button type="button" onClick={() => updateCartQuantity(item._id, -1)} aria-label={`Decrease ${item.name} quantity`}>−</button>
-                          <span>{item.quantity}</span>
-                          <button type="button" onClick={() => updateCartQuantity(item._id, 1)} aria-label={`Increase ${item.name} quantity`}>+</button>
-                          <button type="button" className="remove-cart-item" onClick={() => removeFromCart(item._id)}>Remove</button>
-                        </div>
-                      </div>
+                          <button
+                            type="button"
+                            className="quantity-btn"
+                            onClick={() => updateCartQuantity(item._id, -1)}
+                            disabled={item.quantity <= 1}
+                            aria-label={`Decrease ${item.name} quantity`}
+                          >
+                            −
+                          </button>
+
+                          <span className="quantity-value">{item.quantity}</span>
+
+                          <button
+                            type="button"
+                            className="quantity-btn"
+                            onClick={() => updateCartQuantity(item._id, 1)}
+                            aria-label={`Increase ${item.name} quantity`}
+                          >
+                            +
+                          </button>
+
+                          <button
+                            type="button"
+                            className="remove-cart-item"
+                            onClick={() => removeFromCart(item._id)}
+                            aria-label={`Remove ${item.name} from cart`}
+                            title="Remove item"
+                          >
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M3 6h18" />
+                              <path d="M8 6V4h8v2" />
+                              <path d="m19 6-1 14H6L5 6" />
+                              <path d="M10 11v5M14 11v5" />
+                            </svg>
+                          </button>
+                        </div>                      </div>
                     </div>
                   ))}
 
