@@ -1,135 +1,77 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { cancelOrder, getOrders } from "../services/orderService";
 
 function MyOrders() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [busyOrderId, setBusyOrderId] = useState("");
 
-    // Fetch logged-in user's orders
-    async function fetchOrders() {
+    const fetchOrders = useCallback(async () => {
         try {
             setLoading(true);
             setError("");
-
-            const token = localStorage.getItem("marvetToken");
-
-            const response = await fetch("http://localhost:5000/orders", {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || "Failed to fetch orders");
-            }
-
-            setOrders(data);
-        } catch (error) {
-            setError(error.message || "Something went wrong");
+            const data = await getOrders();
+            setOrders(Array.isArray(data) ? data : data?.orders || []);
+        } catch (err) {
+            setError(err.message || "Failed to load orders");
         } finally {
             setLoading(false);
         }
-    }
+    }, []);
 
-    // Cancel an order
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
+
     async function handleCancelOrder(orderId) {
-        const confirmCancel = window.confirm(
-            "Are you sure you want to cancel this order?"
-        );
-
-        if (!confirmCancel) return;
-
+        if (!window.confirm("Are you sure you want to cancel this order?")) return;
         try {
-            const token = localStorage.getItem("marvetToken");
-
-            const response = await fetch(
-                `http://localhost:5000/orders/${orderId}`,
-                {
-                    method: "DELETE",
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || "Failed to cancel order");
-            }
-
-            // Remove cancelled order from the page
-            setOrders((currentOrders) =>
-                currentOrders.filter((order) => order._id !== orderId)
-            );
-
-            alert("Order cancelled successfully!");
-        } catch (error) {
-            alert(error.message || "Something went wrong");
+            setBusyOrderId(orderId);
+            await cancelOrder(orderId);
+            setOrders((current) => current.filter((order) => order._id !== orderId));
+        } catch (err) {
+            window.alert(err.message || "Failed to cancel order");
+        } finally {
+            setBusyOrderId("");
         }
     }
 
-    // Fetch orders when the page opens
-    useEffect(() => {
-        fetchOrders();
-    }, []);
-
-    if (loading) {
-        return (
-            <main className="my-orders-page">
-                <h2>Loading orders...</h2>
-            </main>
-        );
-    }
-
-    if (error) {
-        return (
-            <main className="my-orders-page">
-                <h1>My Orders</h1>
-                <p>{error}</p>
-
-                <button type="button" onClick={fetchOrders}>
-                    Try Again
-                </button>
-            </main>
-        );
-    }
+    if (loading) return <main className="my-orders-page"><h2>Loading orders...</h2></main>;
 
     return (
         <main className="my-orders-page">
-            <h1>My Orders</h1>
+            <div className="section-header">
+                <div><p className="section-label">YOUR ACCOUNT</p><h1>My Orders</h1></div>
+                <button type="button" onClick={fetchOrders}>Refresh</button>
+            </div>
 
-            {orders.length === 0 ? (
+            {error && <p role="alert">{error}</p>}
+
+            {!error && orders.length === 0 ? (
                 <div className="empty-state">
                     <h2>You haven't placed any orders yet.</h2>
                 </div>
             ) : (
                 <div className="my-orders-list">
                     {orders.map((order) => (
-                        <div className="my-order-card" key={order._id}>
-                            <h3>{order.product?.name || "Product"}</h3>
-
+                        <article className="my-order-card" key={order._id}>
+                            <h3>{order.product?.name || "Product no longer available"}</h3>
                             <p>Quantity: {order.quantity}</p>
-
-                            {order.product?.price !== undefined && (
-                                <p>
-                                    Price: $
-                                    {(order.product.price * order.quantity).toFixed(2)}
-                                </p>
+                            {order.product?.price != null && (
+                                <p>Price: ${(Number(order.product.price) * order.quantity).toFixed(2)}</p>
                             )}
-
+                            <p>Placed: {order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</p>
                             <p className="order-id">Order ID: {order._id}</p>
-
                             <button
                                 type="button"
                                 className="cancel-order-button"
+                                disabled={busyOrderId === order._id}
                                 onClick={() => handleCancelOrder(order._id)}
                             >
-                                Cancel Order
+                                {busyOrderId === order._id ? "Cancelling..." : "Cancel Order"}
                             </button>
-                        </div>
+                        </article>
                     ))}
                 </div>
             )}

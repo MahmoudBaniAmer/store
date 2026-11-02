@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Routes, Route, Link, useNavigate } from "react-router";
 import Products from "./pages/Products";
 import ProductCard from "./components/ProductCard";
@@ -7,7 +7,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import "./App.css";
 import { createOrder } from "./services/orderService";
+import { getProducts } from "./services/productService";
 import MyOrders from "./pages/MyOrders";
+import Categories from "./pages/Categories";
 function CartIcon() {
   return (
     <svg
@@ -48,10 +50,45 @@ function HeartIcon({ filled = false }) {
 
 function App() {
   const navigate = useNavigate();
-const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [cart, setCart] = useState([]);
-  const [favorites, setFavorites] = useState([]);
 
+  const [cart, setCart] = useState(() => {
+    try {
+      const savedCart = localStorage.getItem("marvetCart");
+      return savedCart ? JSON.parse(savedCart) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("marvetCart", JSON.stringify(cart));
+  }, [cart]);
+
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      const saved = localStorage.getItem("marvetFavorites");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("marvetFavorites", JSON.stringify(favorites));
+  }, [favorites]);
+
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  useEffect(() => {
+    let active = true;
+    getProducts()
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.products;
+        if (active) setFeaturedProducts(Array.isArray(list) ? list.slice(0, 4) : []);
+      })
+      .catch((error) => console.error("[Home] Could not load featured products:", error));
+    return () => { active = false; };
+  }, []);
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem("marvetUser");
 
@@ -88,6 +125,17 @@ const [paymentMethod, setPaymentMethod] = useState("cash");
       console.log("[Cart] Product added:", product.name);
       return [...currentCart, { ...product, quantity: 1 }];
     });
+  }
+
+  function updateCartQuantity(productId, change) {
+    setCart((items) => items
+      .map((item) => item._id === productId
+        ? { ...item, quantity: Math.max(1, item.quantity + change) }
+        : item));
+  }
+
+  function removeFromCart(productId) {
+    setCart((items) => items.filter((item) => item._id !== productId));
   }
 
   function toggleFavorite(product) {
@@ -160,40 +208,7 @@ const [paymentMethod, setPaymentMethod] = useState("cash");
     0
   );
 
-  const featuredProducts = [
-    {
-      _id: "demo-headphones",
-      name: "Wireless Headphones",
-      price: 45,
-      category: "Electronics",
-      image: "https://placehold.co/400x300?text=Headphones",
-      stock: 5,
-    },
-    {
-      _id: "demo-watch",
-      name: "Smart Watch",
-      price: 70,
-      category: "Electronics",
-      image: "https://placehold.co/400x300?text=Smart+Watch",
-      stock: 5,
-    },
-    {
-      _id: "demo-shirt",
-      name: "Classic T-Shirt",
-      price: 20,
-      category: "Men's Clothing",
-      image: "https://placehold.co/400x300?text=T-Shirt",
-      stock: 5,
-    },
-    {
-      _id: "demo-necklace",
-      name: "Elegant Necklace",
-      price: 35,
-      category: "Jewelry",
-      image: "https://placehold.co/400x300?text=Necklace",
-      stock: 5,
-    },
-  ];
+
 
   return (
     <div>
@@ -315,6 +330,8 @@ const [paymentMethod, setPaymentMethod] = useState("cash");
           }
         />
 
+        <Route path="/categories" element={<Categories />} />
+
         <Route
           path="/products"
           element={
@@ -400,79 +417,84 @@ const [paymentMethod, setPaymentMethod] = useState("cash");
                       <div>
                         <h3>{item.name}</h3>
                         <p>Price: ${item.price}</p>
-                        <p>Quantity: {item.quantity}</p>
+                        <div className="cart-quantity-controls">
+                          <button type="button" onClick={() => updateCartQuantity(item._id, -1)} aria-label={`Decrease ${item.name} quantity`}>−</button>
+                          <span>{item.quantity}</span>
+                          <button type="button" onClick={() => updateCartQuantity(item._id, 1)} aria-label={`Increase ${item.name} quantity`}>+</button>
+                          <button type="button" className="remove-cart-item" onClick={() => removeFromCart(item._id)}>Remove</button>
+                        </div>
                       </div>
                     </div>
                   ))}
 
-<h2>
-  Total: $
-  {cart
-    .reduce(
-      (total, item) => total + item.price * item.quantity,
-      0
-    )
-    .toFixed(2)}
-</h2>
+                  <h2>
+                    Total: $
+                    {cart
+                      .reduce(
+                        (total, item) => total + item.price * item.quantity,
+                        0
+                      )
+                      .toFixed(2)}
+                  </h2>
 
-{/* Payment Method */}
-<div className="payment-method">
-  <h3>Payment Method</h3>
+                  {/* Payment Method */}
+                  <div className="payment-method">
+                    <h3>Payment Method</h3>
 
-  <label>
-    <input
-      type="radio"
-      name="payment"
-      value="cash"
-      checked={paymentMethod === "cash"}
-      onChange={(e) => setPaymentMethod(e.target.value)}
-    />
-    Cash on Delivery
-  </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="cash"
+                        checked={paymentMethod === "cash"}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                      />
+                      Cash on Delivery
+                    </label>
 
-  <label>
-    <input
-      type="radio"
-      name="payment"
-      value="card"
-      checked={paymentMethod === "card"}
-      onChange={(e) => setPaymentMethod(e.target.value)}
-    />
-    Credit / Debit Card
-  </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="card"
+                        checked={paymentMethod === "card"}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                      />
+                      Credit / Debit Card
+                    </label>
 
-  {paymentMethod === "card" && (
-    <div className="demo-card-form">
-      <input type="text" placeholder="Cardholder Name" />
-      <input
-        type="text"
-        placeholder="Card Number (demo)"
-        maxLength="19"
-      />
+                    {paymentMethod === "card" && (
+                      <div className="demo-card-form">
+                        <input type="text" placeholder="Cardholder Name" />
+                        <input
+                          type="text"
+                          placeholder="Card Number (demo)"
+                          maxLength="19"
+                        />
 
-      <div className="card-row">
-        <input type="text" placeholder="MM/YY" maxLength="5" />
-        <input type="password" placeholder="CVV" maxLength="4" />
-      </div>
+                        <div className="card-row">
+                          <input type="text" placeholder="MM/YY" maxLength="5" />
+                          <input type="password" placeholder="CVV" maxLength="4" />
+                        </div>
 
-      <p>This is a demo payment. No real card details are processed.</p>
-    </div>
-  )}
-</div>
+                        <p>This is a demo payment. No real card details are processed.</p>
+                      </div>
+                    )}
+                  </div>
 
-<button
-  type="button"
-  className="hero-button"
-  onClick={handlePlaceOrder}
->
-  {paymentMethod === "card" ? "Pay Now (Demo)" : "Place Order"}
-</button>
+                  <button
+                    type="button"
+                    className="hero-button"
+                    onClick={handlePlaceOrder}
+                  >
+                    {paymentMethod === "card" ? "Pay Now (Demo)" : "Place Order"}
+                  </button>
                 </div>
               )}
             </main>
           }
         />
-<Route path="/my-orders" element={<MyOrders />} />
+        <Route path="/my-orders" element={<MyOrders />} />
         <Route
           path="/login"
           element={<Login onLogin={handleLogin} />}

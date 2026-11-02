@@ -1,108 +1,123 @@
-
+const mongoose = require("mongoose");
 const Order = require("../models/Order");
+const Product = require("../models/Product");
+const User = require("../models/User");
+const { sendOrderConfirmation } = require("../services/emailService");
+
+const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 // Create Order
 const createOrder = async (req, res) => {
     try {
         const { product, quantity } = req.body;
 
-        // 1. Check required fields
         if (!product || quantity === undefined) {
-            return res.status(400).json({
-                message: "Product and quantity are required"
-            });
+            return res.status(400).json({ message: "Product and quantity are required" });
         }
-
-        // 2. Check quantity
+        if (!isValidId(product)) {
+            return res.status(400).json({ message: "Invalid product ID" });
+        }
         if (!Number.isInteger(quantity) || quantity < 1) {
-            return res.status(400).json({
-                message: "Quantity must be a positive integer"
-            });
+            return res.status(400).json({ message: "Quantity must be a positive integer" });
         }
 
-        // 3. Check if product exists
-        const Product = require("../models/Product");
-        const existingProduct = await Product.findById(product);
+        // Atomically reserve stock to prevent ordering more than available.
+        const existingProduct = await Product.findOneAndUpdate(
+            { _id: product, stock: { $gte: quantity } },
+            [
+                { $set: { stock: { $subtract: ["$stock", quantity] } } },
+                { $set: { inStock: { $gt: ["$stock", 0] } } }
+            ],
+            { new: true }
+        );
 
         if (!existingProduct) {
-            return res.status(404).json({
-                message: "Product not found"
+            const productExists = await Product.exists({ _id: product });
+            return res.status(productExists ? 409 : 404).json({
+                message: productExists ? "Insufficient stock" : "Product not found"
             });
         }
 
-        // 4. Create order
-        const order = new Order({
-            product,
-            quantity,
-            user: req.token.id
-        });
+        try {
+            const order = await Order.create({
+                product,
+                quantity,
+                user: req.token.id
+            });
 
-        await order.save();
+            // Email failure should not cancel a successfully created order.
+            let emailSent = false;
+            try {
+                const user = await User.findById(req.token.id).select("name email");
+                if (user) {
+                    await sendOrderConfirmation({ user, order, product: existingProduct });
+                    emailSent = true;
+                }
+            } catch (emailError) {
+                console.error("Order confirmation email failed:", emailError.message);
+            }
 
-        res.status(201).json(order);
+            return res.status(201).json({
+                message: "Order created successfully",
+                emailSent,
+                order
+            });
+        } catch (error) {
+            // Restore reserved stock if order creation fails.
+            await Product.findByIdAndUpdate(product, {
+                $inc: { stock: quantity },
+                $set: { inStock: true }
+            });
+            throw error;
+        }
     } catch (error) {
-        res.status(400).json({
-            message: error.message
-        });
+        return res.status(500).json({ message: "Failed to create order", error: error.message });
     }
 };
-// Get Orders
+
+// Admin sees all orders; customers see only their own.
 const getOrders = async (req, res) => {
     try {
-        let orders;
+        const filter = req.token.role === "admin" ? {} : { user: req.token.id };
+        const orders = await Order.find(filter)
+            .populate("product")
+            .populate("user", "name email")
+            .sort({ createdAt: -1 });
 
-        // Admin can see all orders
-        if (req.token.role === "admin") {
-            orders = await Order.find()
-                .populate("product")
-                .populate("user", "name email");
-        } else {
-            // Normal user can see only their own orders
-            orders = await Order.find({
-                user: req.token.id
-            })
-                .populate("product")
-                .populate("user", "name email");
-        }
-
-        res.status(200).json(orders);
+        return res.status(200).json(orders);
     } catch (error) {
-        res.status(500).json({
-            message: error.message
-        });
+        return res.status(500).json({ message: "Failed to get orders", error: error.message });
     }
 };
-// Cancel Order
+
+// Customer may cancel own order; admin may cancel any order.
+// Restore stock when cancellation succeeds.
 const cancelOrder = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id);
-
-        // Check if order exists
-        if (!order) {
-            return res.status(404).json({
-                message: "Order not found"
-            });
+        const { id } = req.params;
+        if (!isValidId(id)) {
+            return res.status(400).json({ message: "Invalid order ID" });
         }
 
-        // User can cancel only their own order
-        if (
-            req.token.role !== "admin" &&
-            order.user.toString() !== req.token.id
-        ) {
-            return res.status(403).json({
-                message: "You are not allowed to cancel this order"
-            });
+        const order = await Order.findById(id);
+        if (!order) return res.status(404).json({ message: "Order not found" });
+
+        const isAdmin = req.token.role === "admin";
+        const isOwner = order.user.toString() === req.token.id;
+        if (!isAdmin && !isOwner) {
+            return res.status(403).json({ message: "You are not allowed to cancel this order" });
         }
 
-        await Order.findByIdAndDelete(req.params.id);
-
-        res.status(200).json({
-            message: "Order cancelled successfully"
+        await Order.findByIdAndDelete(id);
+        await Product.findByIdAndUpdate(order.product, {
+            $inc: { stock: order.quantity },
+            $set: { inStock: true }
         });
+
+        return res.status(200).json({ message: "Order cancelled successfully" });
     } catch (error) {
-        res.status(400).json({
-            message: error.message
-        });
+        return res.status(500).json({ message: "Failed to cancel order", error: error.message });
     }
 };
+
 module.exports = { createOrder, getOrders, cancelOrder };

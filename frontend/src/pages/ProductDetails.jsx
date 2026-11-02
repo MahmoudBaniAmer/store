@@ -32,33 +32,57 @@ function ProductDetails({
     const [error, setError] = useState("");
 
     useEffect(() => {
+        let isMounted = true;
+
         async function loadProduct() {
             try {
-                console.log("[ProductDetails] Fetching product:", id);
-
                 setLoading(true);
                 setError("");
 
                 const data = await getProductById(id);
 
-                console.log("[ProductDetails] Product loaded:", data.name);
-                setProduct(data);
+                if (isMounted) {
+                    // Support either a product object or { product: {...} }
+                    const productData = data?.product ?? data;
+
+                    if (!productData || typeof productData !== "object") {
+                        throw new Error("Invalid product data.");
+                    }
+
+                    setProduct(productData);
+                }
             } catch (error) {
-                console.error(
-                    "[ProductDetails] Failed to load product:",
-                    error
-                );
-                setError(error.message);
+                console.error("[ProductDetails] Failed to load product:", error);
+
+                if (isMounted) {
+                    setError(error.message || "Failed to load product.");
+                    setProduct(null);
+                }
             } finally {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         }
 
-        loadProduct();
+        if (id) {
+            loadProduct();
+        } else {
+            setError("Product ID is missing.");
+            setLoading(false);
+        }
+
+        return () => {
+            isMounted = false;
+        };
     }, [id]);
 
     if (loading) {
-        return <main className="product-details-page">Loading product...</main>;
+        return (
+            <main className="product-details-page">
+                <p>Loading product...</p>
+            </main>
+        );
     }
 
     if (error || !product) {
@@ -70,13 +94,26 @@ function ProductDetails({
         );
     }
 
+    const productId = product._id || product.id;
+    const productName = product.name || "Unnamed Product";
+    const productPrice = Number(product.price ?? 0);
+
     const categoryName =
         typeof product.category === "object"
             ? product.category?.name
             : product.category;
 
-    const isAvailable = (product.stock ?? 0) > 0;
-    const productIsFavorite = isFavorite(product);
+    const isAvailable =
+        typeof product.inStock === "boolean"
+            ? product.inStock
+            : Number(product.stock ?? 0) > 0;
+
+    const stockQuantity = Number(product.stock ?? 0);
+    const productIsFavorite = isFavorite?.(product) ?? false;
+
+    const productImage =
+        product.image ||
+        "https://placehold.co/600x450?text=Product";
 
     return (
         <main className="product-details-page">
@@ -87,13 +124,11 @@ function ProductDetails({
             <div className="product-details-container">
                 <div className="product-details-image-container">
                     <img
-                        src={
-                            product.image ||
-                            "https://placehold.co/600x450?text=Product"
-                        }
-                        alt={product.name}
+                        src={productImage}
+                        alt={productName}
                         className="product-details-image"
                         onError={(event) => {
+                            event.currentTarget.onerror = null;
                             event.currentTarget.src =
                                 "https://placehold.co/600x450?text=Image+Unavailable";
                         }}
@@ -105,11 +140,11 @@ function ProductDetails({
                         {categoryName || "General"}
                     </p>
 
-                    <h1>{product.name}</h1>
+                    <h1>{productName}</h1>
 
                     <div className="product-details-price-row">
                         <p className="product-details-price">
-                            ${product.price}
+                            ${productPrice.toFixed(2)}
                         </p>
 
                         <button
@@ -146,14 +181,17 @@ function ProductDetails({
                         }
                     >
                         {isAvailable
-                            ? `In Stock (${product.stock})`
+                            ? stockQuantity > 0
+                                ? `In Stock (${stockQuantity})`
+                                : "In Stock"
                             : "Out of Stock"}
                     </p>
 
                     <button
+                        type="button"
                         className="add-to-cart-button"
                         disabled={!isAvailable}
-                        onClick={() => onAddToCart(product)}
+                        onClick={() => onAddToCart?.(product)}
                     >
                         {isAvailable ? "Add to Cart" : "Unavailable"}
                     </button>

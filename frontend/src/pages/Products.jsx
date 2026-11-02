@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import ProductCard from "../components/ProductCard";
 import { getProducts } from "../services/productService";
+import { getCategories } from "../services/categoryService";
+import { useSearchParams } from "react-router";
 
-function Products({ onAddToCart }) {
-    const [products, setProducts] = useState([]);
+function Products({ onAddToCart, onToggleFavorite, isFavorite }) {
+    const [searchParams] = useSearchParams();   const [categories, setCategories] = useState([]);    const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     const [searchTerm, setSearchTerm] = useState("");
-    const [selectedCategory, setSelectedCategory] = useState("All");
+    const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "All");
     const [minPrice, setMinPrice] = useState("");
     const [maxPrice, setMaxPrice] = useState("");
     const [sortBy, setSortBy] = useState("default");
@@ -24,10 +26,15 @@ function Products({ onAddToCart }) {
                 console.log("[Products] Fetching products...");
 
                 const data = await getProducts();
+                // The API should return an array. Handle unexpected response shapes safely.
+                const productList = Array.isArray(data)
+                    ? data
+                    : Array.isArray(data?.products)
+                        ? data.products
+                        : [];
 
-                console.log("[Products] Products loaded:", data.length);
-
-                setProducts(data);
+                console.log("[Products] Products loaded:", productList.length);
+                setProducts(productList);
             } catch (error) {
                 console.error("[Products] Failed to load products:", error);
                 setError(error.message);
@@ -40,7 +47,8 @@ function Products({ onAddToCart }) {
     }, []);
 
     const filteredProducts = products.filter((product) => {
-        const matchesSearch = product.name
+        const productName = String(product?.name ?? "");
+        const matchesSearch = productName
             .toLowerCase()
             .includes(searchTerm.toLowerCase());
 
@@ -53,11 +61,12 @@ function Products({ onAddToCart }) {
             selectedCategory === "All" ||
             categoryName === selectedCategory;
 
+        const productPrice = Number(product?.price ?? 0);
         const matchesMinPrice =
-            minPrice === "" || product.price >= Number(minPrice);
+            minPrice === "" || productPrice >= Number(minPrice);
 
         const matchesMaxPrice =
-            maxPrice === "" || product.price <= Number(maxPrice);
+            maxPrice === "" || productPrice <= Number(maxPrice);
 
         const matchesRating =
             (product.rating ?? 0) >= Number(minRating);
@@ -78,16 +87,16 @@ function Products({ onAddToCart }) {
     const sortedProducts = [...filteredProducts].sort((a, b) => {
         switch (sortBy) {
             case "price-low":
-                return a.price - b.price;
+                return Number(a.price ?? 0) - Number(b.price ?? 0);
 
             case "price-high":
-                return b.price - a.price;
+                return Number(b.price ?? 0) - Number(a.price ?? 0);
 
             case "name-az":
-                return a.name.localeCompare(b.name);
+                return String(a.name ?? "").localeCompare(String(b.name ?? ""));
 
             case "name-za":
-                return b.name.localeCompare(a.name);
+                return String(b.name ?? "").localeCompare(String(a.name ?? ""));
 
             default:
                 return 0;
@@ -138,9 +147,9 @@ function Products({ onAddToCart }) {
                     onChange={(event) => setSelectedCategory(event.target.value)}
                 >
                     <option value="All">All Categories</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Men's Clothing">Men's Clothing</option>
-                    <option value="Jewelry">Jewelry</option>
+                    {categories.map((category) => (
+                        <option key={category._id} value={category.name}>{category.name}</option>
+                    ))}
                 </select>
 
                 <input
@@ -210,6 +219,8 @@ function Products({ onAddToCart }) {
                             key={product._id}
                             product={product}
                             onAddToCart={onAddToCart}
+                            onToggleFavorite={onToggleFavorite}
+                            isFavorite={isFavorite ? isFavorite(product) : false}
                         />
                     ))
                 ) : (

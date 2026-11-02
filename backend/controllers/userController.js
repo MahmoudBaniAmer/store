@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { sendWelcomeEmail } = require("../services/emailService");
 
 // Register User
 const createUser = async (req, res) => {
@@ -37,8 +38,18 @@ const createUser = async (req, res) => {
 
         await newUser.save();
 
+        // Email failure should not undo a successful registration.
+        let emailSent = false;
+        try {
+            await sendWelcomeEmail(newUser);
+            emailSent = true;
+        } catch (emailError) {
+            console.error("Welcome email failed:", emailError.message);
+        }
+
         return res.status(201).json({
             message: "User registered successfully",
+            emailSent,
             user: {
                 _id: newUser._id,
                 name: newUser.name,

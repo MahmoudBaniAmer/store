@@ -24,26 +24,46 @@ function ProductCard({
     onToggleFavorite,
     isFavorite = false,
 }) {
+    // Protect the component if product data is missing
+    if (!product) {
+        return null;
+    }
+
     const productId = product._id || product.id;
+
+    const productName = product.name || "Unnamed Product";
 
     const categoryName =
         typeof product.category === "object"
             ? product.category?.name
             : product.category;
 
-const isAvailable = product.inStock === true;
+    // Support both backend stock formats:
+    // inStock: true/false OR stock: number
+    const isAvailable =
+        typeof product.inStock === "boolean"
+            ? product.inStock
+            : Number(product.stock ?? 0) > 0;
+
+    const productPrice = Number(product.price ?? 0);
+
+    const productImage =
+        product.image ||
+        "https://placehold.co/400x300?text=Product";
+
     return (
         <div className="product-card">
             <div className="product-image-wrapper">
-                <Link to={`/products/${productId}`} className="product-card-link">
+                <Link
+                    to={productId ? `/products/${productId}` : "/products"}
+                    className="product-card-link"
+                >
                     <img
-                        src={
-                            product.image ||
-                            "https://placehold.co/400x300?text=Product"
-                        }
-                        alt={product.name}
+                        src={productImage}
+                        alt={productName}
                         className="product-image"
                         onError={(event) => {
+                            event.currentTarget.onerror = null;
                             event.currentTarget.src =
                                 "https://placehold.co/400x300?text=Image+Unavailable";
                         }}
@@ -71,24 +91,30 @@ const isAvailable = product.inStock === true;
                 </button>
             </div>
 
-            <Link to={`/products/${productId}`} className="product-card-link">
+            <Link
+                to={productId ? `/products/${productId}` : "/products"}
+                className="product-card-link"
+            >
                 <div className="product-info">
                     <p className="product-category">
                         {categoryName || "General"}
                     </p>
 
-                    <h3 className="product-name">{product.name}</h3>
+                    <h3 className="product-name">{productName}</h3>
 
                     <div className="product-bottom">
-                        <span className="product-price">${product.price}</span>
+                        <span className="product-price">
+                            ${productPrice.toFixed(2)}
+                        </span>
                     </div>
                 </div>
             </Link>
 
             <button
+                type="button"
                 className="add-to-cart-button"
                 disabled={!isAvailable}
-                onClick={() => onAddToCart(product)}
+                onClick={() => onAddToCart?.(product)}
             >
                 {isAvailable ? "Add to Cart" : "Out of Stock"}
             </button>
