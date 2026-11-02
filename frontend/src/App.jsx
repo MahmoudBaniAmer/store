@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Routes, Route, Link, useNavigate } from "react-router";
+import { lazy, Suspense, useState, useEffect } from "react";
+import { Routes, Route, Link, Navigate, useNavigate } from "react-router";
 import Products from "./pages/Products";
 import ProductCard from "./components/ProductCard";
 import ProductDetails from "./pages/ProductDetails";
@@ -10,6 +10,10 @@ import { createOrder } from "./services/orderService";
 import { getProducts } from "./services/productService";
 import MyOrders from "./pages/MyOrders";
 import Categories from "./pages/Categories";
+import Chatbot from "./components/Chatbot";
+import DeliveryLocation from "./components/DeliveryLocation";
+
+const Admin = lazy(() => import("./pages/Admin"));
 function CartIcon() {
   return (
     <svg
@@ -48,34 +52,83 @@ function HeartIcon({ filled = false }) {
   );
 }
 
+function getUserId(user) {
+  const userId = user?._id || user?.id;
+  return typeof userId === "string" && userId.trim() ? userId.trim() : null;
+}
+
+function getStorageScope(user) {
+  return getUserId(user) || "guest";
+}
+
+function getScopedStorageKey(key, scope) {
+  return `${key}:${scope}`;
+}
+
+function readStoredItems(key, scope) {
+  const storedItems = localStorage.getItem(getScopedStorageKey(key, scope));
+  if (!storedItems) return [];
+
+  try {
+    const parsedItems = JSON.parse(storedItems);
+    return Array.isArray(parsedItems) ? parsedItems : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredItems(key, scope, items) {
+  localStorage.setItem(getScopedStorageKey(key, scope), JSON.stringify(items));
+}
+
+function migrateLegacyCollections() {
+  [
+    ["marvetCart", "marvetCart:guest"],
+    ["marvetFavorites", "marvetFavorites:guest"],
+  ].forEach(([legacyKey, guestKey]) => {
+    const legacyItems = localStorage.getItem(legacyKey);
+    if (legacyItems === null) return;
+
+    if (localStorage.getItem(guestKey) === null) {
+      try {
+        const parsedItems = JSON.parse(legacyItems);
+        if (Array.isArray(parsedItems)) {
+          localStorage.setItem(guestKey, JSON.stringify(parsedItems));
+        }
+      } catch {
+        // Ignore invalid legacy data and allow the guest collection to start empty.
+      }
+    }
+
+    localStorage.removeItem(legacyKey);
+  });
+}
+
 function App() {
   const navigate = useNavigate();
 
-  const [cart, setCart] = useState(() => {
+  const [user, setUser] = useState(() => {
+    migrateLegacyCollections();
+    const savedUser = localStorage.getItem("marvetUser");
+
     try {
-      const savedCart = localStorage.getItem("marvetCart");
-      return savedCart ? JSON.parse(savedCart) : [];
+      const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+      return parsedUser && typeof parsedUser === "object" && !Array.isArray(parsedUser)
+        ? parsedUser
+        : null;
     } catch {
-      return [];
+      localStorage.removeItem("marvetUser");
+      return null;
     }
   });
+  const storageScope = getStorageScope(user);
+  const [cart, setCart] = useState(() => readStoredItems("marvetCart", storageScope));
+  const [favorites, setFavorites] = useState(() => readStoredItems("marvetFavorites", storageScope));
 
   useEffect(() => {
-    localStorage.setItem("marvetCart", JSON.stringify(cart));
-  }, [cart]);
-
-  const [favorites, setFavorites] = useState(() => {
-    try {
-      const saved = localStorage.getItem("marvetFavorites");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem("marvetFavorites", JSON.stringify(favorites));
-  }, [favorites]);
+    saveStoredItems("marvetCart", storageScope, cart);
+    saveStoredItems("marvetFavorites", storageScope, favorites);
+  }, [cart, favorites, storageScope]);
 
   const [featuredProducts, setFeaturedProducts] = useState([]);
   useEffect(() => {
@@ -88,18 +141,6 @@ function App() {
       .catch((error) => console.error("[Home] Could not load featured products:", error));
     return () => { active = false; };
   }, []);
-  const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem("marvetUser");
-
-    try {
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch {
-      localStorage.removeItem("marvetUser");
-      return null;
-    }
-  });
-
   function addToCart(product) {
     if (!product) {
       console.error("[Cart] Cannot add an undefined product.");
@@ -164,17 +205,36 @@ function App() {
   }
 
   function handleLogin(userData, token) {
+    const currentScope = getStorageScope(user);
+    const nextScope = getStorageScope(userData);
+
+    saveStoredItems("marvetCart", currentScope, cart);
+    saveStoredItems("marvetFavorites", currentScope, favorites);
+
+    const nextCart = readStoredItems("marvetCart", nextScope);
+    const nextFavorites = readStoredItems("marvetFavorites", nextScope);
+
     localStorage.setItem("marvetToken", token);
     localStorage.setItem("marvetUser", JSON.stringify(userData));
 
+    setCart(nextCart);
+    setFavorites(nextFavorites);
     setUser(userData);
     navigate("/");
   }
 
   function handleLogout() {
+    const currentScope = getStorageScope(user);
+    const guestCart = readStoredItems("marvetCart", "guest");
+    const guestFavorites = readStoredItems("marvetFavorites", "guest");
+
+    saveStoredItems("marvetCart", currentScope, cart);
+    saveStoredItems("marvetFavorites", currentScope, favorites);
     localStorage.removeItem("marvetToken");
     localStorage.removeItem("marvetUser");
 
+    setCart(guestCart);
+    setFavorites(guestFavorites);
     setUser(null);
     navigate("/");
   }
@@ -190,12 +250,12 @@ function App() {
     }
 
     try {
-      for (const item of cart) {
-        await createOrder({
+      await createOrder({
+        items: cart.map((item) => ({
           product: item._id,
           quantity: item.quantity,
-        });
-      }
+        })),
+      });
 
       setCart([]);
       alert("Your order has been placed successfully!");
@@ -477,57 +537,19 @@ function App() {
                       .toFixed(2)}
                   </h2>
 
-                  {/* Payment Method */}
                   <div className="payment-method">
                     <h3>Payment Method</h3>
-
-                    <label>
-                      <input
-                        type="radio"
-                        name="payment"
-                        value="cash"
-                        checked={paymentMethod === "cash"}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                      />
-                      Cash on Delivery
-                    </label>
-
-                    <label>
-                      <input
-                        type="radio"
-                        name="payment"
-                        value="card"
-                        checked={paymentMethod === "card"}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                      />
-                      Credit / Debit Card
-                    </label>
-
-                    {paymentMethod === "card" && (
-                      <div className="demo-card-form">
-                        <input type="text" placeholder="Cardholder Name" />
-                        <input
-                          type="text"
-                          placeholder="Card Number (demo)"
-                          maxLength="19"
-                        />
-
-                        <div className="card-row">
-                          <input type="text" placeholder="MM/YY" maxLength="5" />
-                          <input type="password" placeholder="CVV" maxLength="4" />
-                        </div>
-
-                        <p>This is a demo payment. No real card details are processed.</p>
-                      </div>
-                    )}
+                    <p>Cash on delivery. This demo does not collect or process payment information.</p>
                   </div>
+
+                  <DeliveryLocation />
 
                   <button
                     type="button"
                     className="hero-button"
                     onClick={handlePlaceOrder}
                   >
-                    {paymentMethod === "card" ? "Pay Now (Demo)" : "Place Order"}
+                    Place Order
                   </button>
                 </div>
               )}
@@ -536,15 +558,23 @@ function App() {
         />
         <Route path="/my-orders" element={<MyOrders />} />
         <Route
+          path="/admin"
+          element={user?.role === "admin"
+            ? <Suspense fallback={<main className="admin-page">Loading dashboard…</main>}><Admin user={user} /></Suspense>
+            : <Navigate to="/login" replace />}
+        />
+        <Route
           path="/login"
           element={<Login onLogin={handleLogin} />}
         />
 
         <Route
           path="/register"
-          element={<Register />}
+          element={<Register onLogin={handleLogin} />}
         />
       </Routes>
+
+      <Chatbot />
 
       <footer className="footer">
         <div className="footer-content">

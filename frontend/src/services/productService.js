@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:5000/products";
+import { API_BASE_URL } from "./apiConfig";
+
+const API_URL = `${API_BASE_URL}/products`;
 
 // Get all products
 export async function getProducts() {

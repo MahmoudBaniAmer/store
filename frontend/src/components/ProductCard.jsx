@@ -102,6 +102,12 @@ function ProductCard({
 
                     <h3 className="product-name">{productName}</h3>
 
+                    {Number(product.reviewCount) > 0 && (
+                        <p className="product-card-rating" aria-label={`${Number(product.rating || 0).toFixed(1)} out of 5 from ${product.reviewCount} reviews`}>
+                            <span aria-hidden="true">★</span> {Number(product.rating || 0).toFixed(1)} ({product.reviewCount})
+                        </p>
+                    )}
+
                     <div className="product-bottom">
                         <span className="product-price">
                             ${productPrice.toFixed(2)}

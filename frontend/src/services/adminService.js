@@ -1,4 +1,6 @@
-const API_BASE = "http://localhost:5000";
+import { API_BASE_URL } from "./apiConfig";
+
+const API_BASE = API_BASE_URL;
 
 function authHeaders() {
     const token = localStorage.getItem("marvetToken");
@@ -30,8 +32,10 @@ export const adminGetCategories = () => fetch(`${API_BASE}/categories`).then(asy
     return data;
 });
 export const adminGetOrders = () => request("/orders");
+export const adminGetAnalytics = () => request("/api/admin/analytics");
 export const adminCreateProduct = (body) => request("/products", { method: "POST", body: JSON.stringify(body) });
 export const adminUpdateProduct = (id, body) => request(`/products/${id}`, { method: "PUT", body: JSON.stringify(body) });
 export const adminDeleteProduct = (id) => request(`/products/${id}`, { method: "DELETE" });
 export const adminCreateCategory = (body) => request("/categories", { method: "POST", body: JSON.stringify(body) });
+export const adminUpdateCategory = (id, body) => request(`/categories/${id}`, { method: "PUT", body: JSON.stringify(body) });
 export const adminDeleteCategory = (id) => request(`/categories/${id}`, { method: "DELETE" });

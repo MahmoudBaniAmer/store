@@ -1,4 +1,5 @@
 const Product = require("../models/Product");
+const Review = require("../models/Review");
 
 // Create Product
 const createProduct = async (req, res) => {
@@ -46,9 +47,31 @@ const createProduct = async (req, res) => {
 // Get All Products
 const getProducts = async (req, res) => {
     try {
-        const products = await Product.find().populate("category");
+        const [products, reviewSummaries] = await Promise.all([
+            Product.find().populate("category"),
+            Review.aggregate([
+                {
+                    $group: {
+                        _id: "$product",
+                        averageRating: { $avg: "$rating" },
+                        reviewCount: { $sum: 1 }
+                    }
+                }
+            ])
+        ]);
+        const reviewsByProduct = new Map(
+            reviewSummaries.map((summary) => [summary._id.toString(), summary])
+        );
+        const productsWithRatings = products.map((product) => {
+            const summary = reviewsByProduct.get(product._id.toString());
+            return {
+                ...product.toObject(),
+                rating: summary ? Number(summary.averageRating.toFixed(1)) : 0,
+                reviewCount: summary?.reviewCount || 0
+            };
+        });
 
-        res.status(200).json(products);
+        res.status(200).json(productsWithRatings);
     } catch (error) {
         res.status(500).json({
             message: error.message,

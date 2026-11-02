@@ -5,7 +5,9 @@ import { getCategories } from "../services/categoryService";
 import { useSearchParams } from "react-router";
 
 function Products({ onAddToCart, onToggleFavorite, isFavorite }) {
-    const [searchParams] = useSearchParams();   const [categories, setCategories] = useState([]);    const [products, setProducts] = useState([]);
+    const [searchParams] = useSearchParams();
+    const [categories, setCategories] = useState([]);
+    const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -25,7 +27,10 @@ function Products({ onAddToCart, onToggleFavorite, isFavorite }) {
 
                 console.log("[Products] Fetching products...");
 
-                const data = await getProducts();
+                const [data, categoryData] = await Promise.all([
+                    getProducts(),
+                    getCategories(),
+                ]);
                 // The API should return an array. Handle unexpected response shapes safely.
                 const productList = Array.isArray(data)
                     ? data
@@ -35,6 +40,7 @@ function Products({ onAddToCart, onToggleFavorite, isFavorite }) {
 
                 console.log("[Products] Products loaded:", productList.length);
                 setProducts(productList);
+                setCategories(Array.isArray(categoryData) ? categoryData : []);
             } catch (error) {
                 console.error("[Products] Failed to load products:", error);
                 setError(error.message);

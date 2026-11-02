@@ -4,6 +4,7 @@ const userRouter = express.Router();
 const {
     createUser,
     login,
+    googleLogin,
     getUsers,
     updateUserRole
 
@@ -14,6 +15,7 @@ const authorization = require("../middleware/authorization");
 
 userRouter.post("/register", createUser);
 userRouter.post("/login", login);
+userRouter.post("/google", googleLogin);
 
 userRouter.get(
     "/users",

@@ -54,25 +54,40 @@ function MyOrders() {
                 </div>
             ) : (
                 <div className="my-orders-list">
-                    {orders.map((order) => (
-                        <article className="my-order-card" key={order._id}>
-                            <h3>{order.product?.name || "Product no longer available"}</h3>
-                            <p>Quantity: {order.quantity}</p>
-                            {order.product?.price != null && (
-                                <p>Price: ${(Number(order.product.price) * order.quantity).toFixed(2)}</p>
-                            )}
-                            <p>Placed: {order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</p>
-                            <p className="order-id">Order ID: {order._id}</p>
-                            <button
-                                type="button"
-                                className="cancel-order-button"
-                                disabled={busyOrderId === order._id}
-                                onClick={() => handleCancelOrder(order._id)}
-                            >
-                                {busyOrderId === order._id ? "Cancelling..." : "Cancel Order"}
-                            </button>
-                        </article>
-                    ))}
+                    {orders.map((order) => {
+                        const items = order.items?.length
+                            ? order.items
+                            : [{ product: order.product, quantity: order.quantity }];
+                        const total = items.reduce((sum, item) => (
+                            item.product?.price != null
+                                ? sum + Number(item.product.price) * item.quantity
+                                : sum
+                        ), 0);
+
+                        return (
+                            <article className="my-order-card" key={order._id}>
+                                <h3>{items.length === 1 ? items[0].product?.name || "Product no longer available" : `Order (${items.length} items)`}</h3>
+                                {items.map((item, index) => (
+                                    <p key={item.product?._id || index}>
+                                        {item.product?.name || "Product no longer available"} — Quantity: {item.quantity}
+                                    </p>
+                                ))}
+                                {items.every((item) => item.product?.price != null) && (
+                                    <p>Price: ${total.toFixed(2)}</p>
+                                )}
+                                <p>Placed: {order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</p>
+                                <p className="order-id">Order ID: {order._id}</p>
+                                <button
+                                    type="button"
+                                    className="cancel-order-button"
+                                    disabled={busyOrderId === order._id}
+                                    onClick={() => handleCancelOrder(order._id)}
+                                >
+                                    {busyOrderId === order._id ? "Cancelling..." : "Cancel Order"}
+                                </button>
+                            </article>
+                        );
+                    })}
                 </div>
             )}
         </main>

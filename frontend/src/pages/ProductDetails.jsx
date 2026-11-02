@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { getProductById } from "../services/productService";
 import { getProductReviews, createProductReview } from "../services/reviewService";
@@ -46,7 +46,7 @@ function ProductDetails({ onAddToCart, onToggleFavorite, isFavorite = () => fals
         return () => { active = false; };
     }, [id]);
 
-    async function loadReviews() {
+    const loadReviews = useCallback(async () => {
         try {
             setReviewLoading(true); setReviewError("");
             const data = await getProductReviews(id);
@@ -54,9 +54,9 @@ function ProductDetails({ onAddToCart, onToggleFavorite, isFavorite = () => fals
             setAverageRating(Number(data.averageRating || 0));
         } catch (err) { setReviewError(err.message || "Could not load reviews."); }
         finally { setReviewLoading(false); }
-    }
+    }, [id]);
 
-    useEffect(() => { if (id) loadReviews(); }, [id]);
+    useEffect(() => { if (id) loadReviews(); }, [id, loadReviews]);
 
     async function handleReviewSubmit(event) {
         event.preventDefault();
@@ -74,7 +74,6 @@ function ProductDetails({ onAddToCart, onToggleFavorite, isFavorite = () => fals
     if (loading) return <main className="product-details-page"><p>Loading product...</p></main>;
     if (error || !product) return <main className="product-details-page"><p>{error || "Product not found."}</p><Link to="/products">Back to Products</Link></main>;
 
-    const productId = product._id || product.id;
     const productName = product.name || "Unnamed Product";
     const productPrice = Number(product.price ?? 0);
     const categoryName = typeof product.category === "object" ? product.category?.name : product.category;

@@ -40,12 +40,19 @@ async function sendWelcomeEmail(user) {
     });
 }
 
-async function sendOrderConfirmation({ user, order, product }) {
+async function sendOrderConfirmation({ user, order, items }) {
+    const itemText = items
+        .map(({ product, quantity }) => `${product.name} x ${quantity}`)
+        .join("\n");
+    const itemHtml = items
+        .map(({ product, quantity }) => `<li><strong>${escapeHtml(product.name)}:</strong> ${quantity}</li>`)
+        .join("");
+
     return sendEmail({
         to: user.email,
         subject: "Your Marvet order is confirmed",
-        text: `Hi ${user.name},\n\nYour order has been placed successfully.\nProduct: ${product.name}\nQuantity: ${order.quantity}\nOrder ID: ${order._id}\n\nThank you for shopping with Marvet!`,
-        html: `<h2>Order confirmed</h2><p>Hi ${escapeHtml(user.name)}, your order has been placed successfully.</p><ul><li><strong>Product:</strong> ${escapeHtml(product.name)}</li><li><strong>Quantity:</strong> ${order.quantity}</li><li><strong>Order ID:</strong> ${order._id}</li></ul><p>Thank you for shopping with Marvet!</p>`
+        text: `Hi ${user.name},\n\nYour order has been placed successfully.\nItems:\n${itemText}\nOrder ID: ${order._id}\n\nThank you for shopping with Marvet!`,
+        html: `<h2>Order confirmed</h2><p>Hi ${escapeHtml(user.name)}, your order has been placed successfully.</p><ul>${itemHtml}</ul><p><strong>Order ID:</strong> ${order._id}</p><p>Thank you for shopping with Marvet!</p>`
     });
 }
 

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { registerUser } from "../services/authService";
+import GoogleAuthButton from "../components/GoogleAuthButton";
 
-function Register() {
+function Register({ onLogin }) {
     const navigate = useNavigate();
 
     const [name, setName] = useState("");
@@ -81,6 +82,8 @@ function Register() {
                 <button type="submit" disabled={loading}>
                     {loading ? "Creating account..." : "Register"}
                 </button>
+
+                <GoogleAuthButton onLogin={onLogin} onError={setError} onLoading={setLoading} />
 
                 <p>
                     Already have an account? <Link to="/login">Login</Link>

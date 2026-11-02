@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:5000/orders";
+import { API_BASE_URL } from "./apiConfig";
+
+const API_URL = `${API_BASE_URL}/orders`;
 
 function getAuthHeaders() {
     const token = localStorage.getItem("marvetToken");

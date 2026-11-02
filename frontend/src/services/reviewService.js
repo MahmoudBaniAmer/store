@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:5000/reviews";
+import { API_BASE_URL } from "./apiConfig";
+
+const API_URL = `${API_BASE_URL}/reviews`;
 
 export async function getProductReviews(productId) {
     const response = await fetch(`${API_URL}/${productId}`);
