@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState, useEffect } from "react";
-import { Routes, Route, Link, Navigate, useNavigate } from "react-router";
+import { lazy, Suspense, useState, useEffect, useRef } from "react";
+import { Routes, Route, Link, Navigate, useLocation, useNavigate } from "react-router";
 import Products from "./pages/Products";
 import ProductCard from "./components/ProductCard";
 import ProductDetails from "./pages/ProductDetails";
@@ -65,6 +65,67 @@ function getScopedStorageKey(key, scope) {
   return `${key}:${scope}`;
 }
 
+function getOrderRequestFingerprint(items, deliveryLocation) {
+  const normalizedItems = items
+    .map(({ product, quantity }) => ({ product: String(product), quantity }))
+    .sort((left, right) => left.product.localeCompare(right.product));
+
+  return JSON.stringify({
+    items: normalizedItems,
+    deliveryLocation: deliveryLocation
+      ? { lat: deliveryLocation.lat, lng: deliveryLocation.lng }
+      : null,
+  });
+}
+
+function createCheckoutKey() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function getCheckoutKey(scope, fingerprint) {
+  const storageKey = getScopedStorageKey("marvetCheckoutRequest", scope);
+  let savedRequest = null;
+  try {
+    const storedValue = localStorage.getItem(storageKey);
+    savedRequest = storedValue ? JSON.parse(storedValue) : null;
+  } catch {
+    savedRequest = null;
+  }
+
+  if (
+    savedRequest?.fingerprint === fingerprint &&
+    typeof savedRequest.key === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(savedRequest.key)
+  ) {
+    return savedRequest.key;
+  }
+
+  const key = createCheckoutKey();
+  try {
+    localStorage.setItem(storageKey, JSON.stringify({ key, fingerprint }));
+  } catch {
+    throw new Error("Checkout retry protection could not be saved in this browser. Enable local storage and try again.");
+  }
+  return key;
+}
+
+function getInitialTheme() {
+  try {
+    const savedTheme = localStorage.getItem("marvetTheme");
+    if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+  } catch {
+    // Theme still follows the system preference when storage is unavailable.
+  }
+
+  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+}
+
 function readStoredItems(key, scope) {
   const storedItems = localStorage.getItem(getScopedStorageKey(key, scope));
   if (!storedItems) return [];
@@ -105,7 +166,19 @@ function migrateLegacyCollections() {
 }
 
 function App() {
+  const location = useLocation();
   const navigate = useNavigate();
+  const isAuthPage = ["/login", "/register"].includes(location.pathname);
+  const [theme, setTheme] = useState(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("marvetTheme", theme);
+    } catch {
+      // The selected theme remains active for this page session.
+    }
+  }, [theme]);
 
   const [user, setUser] = useState(() => {
     migrateLegacyCollections();
@@ -126,6 +199,8 @@ function App() {
   const [favorites, setFavorites] = useState(() => readStoredItems("marvetFavorites", storageScope));
   const [deliveryLocation, setDeliveryLocation] = useState(null);
   const [shareDeliveryLocation, setShareDeliveryLocation] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const orderSubmissionStarted = useRef(false);
 
   useEffect(() => {
     saveStoredItems("marvetCart", storageScope, cart);
@@ -250,14 +325,22 @@ function App() {
       return;
     }
 
+    if (orderSubmissionStarted.current) return;
+    orderSubmissionStarted.current = true;
+    setPlacingOrder(true);
+
     try {
-      await createOrder({
+      const orderData = {
         items: cart.map((item) => ({
           product: item._id,
           quantity: item.quantity,
         })),
         ...(shareDeliveryLocation && deliveryLocation ? { deliveryLocation } : {}),
-      });
+      };
+      const fingerprint = getOrderRequestFingerprint(orderData.items, orderData.deliveryLocation);
+      const checkoutKey = getCheckoutKey(getStorageScope(user), fingerprint);
+      await createOrder(orderData, checkoutKey);
+      localStorage.removeItem(getScopedStorageKey("marvetCheckoutRequest", getStorageScope(user)));
 
       setCart([]);
       setDeliveryLocation(null);
@@ -265,6 +348,9 @@ function App() {
       alert("Your order has been placed successfully!");
     } catch (error) {
       alert(error.message || "Failed to place order.");
+    } finally {
+      orderSubmissionStarted.current = false;
+      setPlacingOrder(false);
     }
   }
   const cartCount = cart.reduce(
@@ -276,60 +362,73 @@ function App() {
 
   return (
     <div>
-      <header className="navbar">
+      <header className={`navbar${isAuthPage ? " auth-navbar" : ""}`}>
         <Link to="/" className="logo">
           Marvet
         </Link>
+        <button
+          type="button"
+          className="theme-toggle"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+        >
+          <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+          <span>{theme === "dark" ? "Light" : "Dark"} mode</span>
+        </button>
 
-        <nav className="nav-links">
-          <Link to="/my-orders">My Orders</Link>
-          <Link to="/">Home</Link>
-          <Link to="/products">Products</Link>
-          <Link to="/categories">Categories</Link>
-        </nav>
+        {!isAuthPage && (
+          <>
+            <nav className="nav-links">
+              <Link to="/my-orders">My Orders</Link>
+              <Link to="/">Home</Link>
+              <Link to="/products">Products</Link>
+              <Link to="/categories">Categories</Link>
+            </nav>
 
-        <div className="nav-actions">
-          <Link to="/products" className="nav-action-link">
-            Search
-          </Link>
+            <div className="nav-actions">
+              <Link to="/products" className="nav-action-link">
+                Search
+              </Link>
 
-          <Link to="/favorites" className="favorites-nav-link">
-            <HeartIcon filled={favorites.length > 0} />
-            <span>Favorites</span>
+              <Link to="/favorites" className="favorites-nav-link">
+                <HeartIcon filled={favorites.length > 0} />
+                <span>Favorites</span>
 
-            {favorites.length > 0 && (
-              <span className="favorites-count">
-                {favorites.length}
-              </span>
-            )}
-          </Link>
+                {favorites.length > 0 && (
+                  <span className="favorites-count">
+                    {favorites.length}
+                  </span>
+                )}
+              </Link>
 
-          <Link to="/cart" className="cart-nav-button">
-            <CartIcon />
-            <span className="cart-nav-label">Cart</span>
-            <span className="cart-count-badge">{cartCount}</span>
-          </Link>
+              <Link to="/cart" className="cart-nav-button">
+                <CartIcon />
+                <span className="cart-nav-label">Cart</span>
+                <span className="cart-count-badge">{cartCount}</span>
+              </Link>
 
-          {user ? (
-            <div className="nav-user-actions">
-              <span className="nav-user-name">
-                Hi, {user.name}
-              </span>
+              {user ? (
+                <div className="nav-user-actions">
+                  <span className="nav-user-name">
+                    Hi, {user.name}
+                  </span>
 
-              <button
-                type="button"
-                className="login-button"
-                onClick={handleLogout}
-              >
-                Logout
-              </button>
+                  <button
+                    type="button"
+                    className="login-button"
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <Link to="/login" className="login-button">
+                  Login
+                </Link>
+              )}
             </div>
-          ) : (
-            <Link to="/login" className="login-button">
-              Login
-            </Link>
-          )}
-        </div>
+          </>
+        )}
       </header>
 
       <Routes>
@@ -565,9 +664,10 @@ function App() {
                   <button
                     type="button"
                     className="hero-button"
+                    disabled={placingOrder}
                     onClick={handlePlaceOrder}
                   >
-                    Place Order
+                    {placingOrder ? "Placing order..." : "Place Order"}
                   </button>
                 </div>
               )}
@@ -581,7 +681,7 @@ function App() {
         <Route
           path="/admin"
           element={user?.role === "admin"
-            ? <Suspense fallback={<main className="admin-page">Loading dashboard…</main>}><Admin user={user} /></Suspense>
+            ? <Suspense fallback={<main className="admin-page">Loading dashboard…</main>}><Admin user={user} theme={theme} /></Suspense>
             : <Navigate to="/login" replace />}
         />
         <Route

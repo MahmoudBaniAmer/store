@@ -103,7 +103,7 @@ const getAnalytics = async (req, res) => {
                     }
                 }
             ]),
-            Product.find()
+            Product.find({ isActive: { $ne: false } })
                 .select("stock category")
                 .populate("category", "name")
                 .lean()

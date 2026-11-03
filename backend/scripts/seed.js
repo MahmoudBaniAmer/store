@@ -5,6 +5,8 @@ const { connectDB } = require("../models/db");
 const Category = require("../models/Category");
 const Product = require("../models/Product");
 
+const LOCAL_MONGO_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
 const sampleCategories = [
     { name: "Electronics", description: "Everyday technology and accessories." },
     { name: "Home & Living", description: "Practical essentials for your home." },
@@ -61,7 +63,18 @@ async function seed() {
         throw new Error("Seeding is allowed only when NODE_ENV=development");
     }
 
+    const expectedDatabase = process.env.EXPECTED_SEED_DATABASE?.trim();
+    if (!expectedDatabase) {
+        throw new Error("Set EXPECTED_SEED_DATABASE to the exact disposable local database name");
+    }
+
     await connectDB();
+    if (
+        mongoose.connection.name !== expectedDatabase ||
+        !LOCAL_MONGO_HOSTS.has(mongoose.connection.host)
+    ) {
+        throw new Error("Seed is allowed only on the matching local development database");
+    }
 
     const categories = new Map();
     let categoriesCreated = 0;

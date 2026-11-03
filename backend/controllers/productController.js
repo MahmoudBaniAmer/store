@@ -1,10 +1,11 @@
 const Product = require("../models/Product");
 const Review = require("../models/Review");
+const Category = require("../models/Category");
 
 // Create Product
 const createProduct = async (req, res) => {
     try {
-        const { name, description, price, category, image, stock } = req.body;
+        const { name, brand, description, price, category, image, stock } = req.body;
 
         if (!name || !description || price === undefined || !category) {
             return res.status(400).json({
@@ -24,14 +25,22 @@ const createProduct = async (req, res) => {
             });
         }
 
+        if (!await Category.exists({ _id: category })) {
+            return res.status(400).json({
+                message: "A valid existing category is required",
+            });
+        }
+
         const product = new Product({
             name,
+            brand,
             description,
             price: Number(price),
             category,
             image,
             stock: stock === undefined ? 0 : Number(stock),
             inStock: Number(stock) > 0,
+            isActive: true,
         });
 
         await product.save();
@@ -46,11 +55,10 @@ const createProduct = async (req, res) => {
     }
 };
 
-// Get All Products
-const getProducts = async (req, res) => {
+const listProducts = async (res, includeInactive) => {
     try {
         const [products, reviewSummaries] = await Promise.all([
-            Product.find().populate("category"),
+            Product.find(includeInactive ? {} : { isActive: { $ne: false } }).populate("category"),
             Review.aggregate([
                 {
                     $group: {
@@ -80,10 +88,19 @@ const getProducts = async (req, res) => {
     }
 };
 
+// Public catalog hides products retained only for historical orders.
+const getProducts = async (req, res) => listProducts(res, false);
+
+// Archived products remain available to administrators for restoration.
+const getAdminProducts = async (req, res) => listProducts(res, true);
+
 // Get Product By ID
 const getProductById = async (req, res) => {
     try {
-        const product = await Product.findById(req.params.id).populate("category");
+        const product = await Product.findOne({
+            _id: req.params.id,
+            isActive: { $ne: false }
+        }).populate("category");
 
         if (!product) {
             return res.status(404).json({
@@ -110,7 +127,7 @@ const updateProduct = async (req, res) => {
             });
         }
 
-        const allowedFields = ["name", "description", "price", "category", "image", "stock"];
+        const allowedFields = ["name", "brand", "description", "price", "category", "image", "stock", "isActive"];
         const updates = Object.fromEntries(
             allowedFields
                 .filter((field) => req.body[field] !== undefined)
@@ -131,6 +148,23 @@ const updateProduct = async (req, res) => {
                     message: "Price cannot be negative",
                 });
             }
+        }
+
+        if (updates.brand !== undefined) {
+            if (typeof updates.brand !== "string") {
+                return res.status(400).json({ message: "Brand must be text" });
+            }
+            updates.brand = updates.brand.trim();
+        }
+
+        if (updates.category !== undefined && !await Category.exists({ _id: updates.category })) {
+            return res.status(400).json({
+                message: "A valid existing category is required",
+            });
+        }
+
+        if (updates.isActive !== undefined && typeof updates.isActive !== "boolean") {
+            return res.status(400).json({ message: "Product visibility must be true or false" });
         }
 
         if (updates.stock !== undefined) {
@@ -196,6 +230,7 @@ const deleteProduct = async (req, res) => {
 module.exports = {
     createProduct,
     getProducts,
+    getAdminProducts,
     getProductById,
     updateProduct,
     deleteProduct,

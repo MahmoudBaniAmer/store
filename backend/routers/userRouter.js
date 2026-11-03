@@ -5,7 +5,6 @@ const userRouter = express.Router();
 const {
     createUser,
     login,
-    googleLogin,
     getUsers,
     updateUserRole
 
@@ -31,7 +30,6 @@ const authenticationRateLimit = rateLimit({
 
 userRouter.post("/register", registrationRateLimit, createUser);
 userRouter.post("/login", authenticationRateLimit, login);
-userRouter.post("/google", authenticationRateLimit, googleLogin);
 
 userRouter.get(
     "/users",

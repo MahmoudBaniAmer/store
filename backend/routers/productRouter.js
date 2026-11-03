@@ -6,6 +6,7 @@ const productRouter = express.Router();
 const {
     createProduct,
     getProducts,
+    getAdminProducts,
     getProductById,
     updateProduct,
     deleteProduct
@@ -15,6 +16,7 @@ const authentication = require("../middleware/authentication");
 const authorization = require("../middleware/authorization");
 
 // Public Routes
+productRouter.get("/admin", authentication, authorization("admin"), getAdminProducts);
 productRouter.get("/", getProducts);
 productRouter.get("/:id", getProductById);
 

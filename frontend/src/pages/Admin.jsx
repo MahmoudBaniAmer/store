@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
     adminGetProducts, adminGetCategories, adminGetOrders,
@@ -20,10 +20,10 @@ import {
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Legend, Tooltip);
 
-const emptyProduct = { name: "", description: "", price: "", category: "", image: "", stock: "0" };
+const emptyProduct = { name: "", brand: "", description: "", price: "", category: "", image: "", stock: "0", isActive: true };
 const emptyCategory = { name: "", description: "" };
 
-export default function Admin({ user }) {
+export default function Admin({ user, theme = "light" }) {
     const [tab, setTab] = useState("overview");
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -41,9 +41,11 @@ export default function Admin({ user }) {
     const [categoryForm, setCategoryForm] = useState(emptyCategory);
     const [editingCategoryId, setEditingCategoryId] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [dataLoaded, setDataLoaded] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const initialLoadStarted = useRef(false);
 
     const loadData = useCallback(async () => {
         setLoading(true); setError("");
@@ -65,17 +67,18 @@ export default function Admin({ user }) {
                 revenueByDay: Array.isArray(a?.revenueByDay) ? a.revenueByDay : [],
                 salesSummary: a?.salesSummary || { totalRevenue: 0, totalOrders: 0, unitsSold: 0 },
             });
+            setDataLoaded(true);
         } catch (e) { setError(e.message); }
         finally { setLoading(false); }
     }, []);
 
-    useEffect(() => { loadData(); }, [loadData]);
+    useEffect(() => {
+        if (user?.role !== "admin" || initialLoadStarted.current) return;
+        initialLoadStarted.current = true;
+        void loadData();
+    }, [loadData, user?.role]);
 
-    if (!user || user.role !== "admin") {
-        return <main className="admin-page"><section className="admin-panel"><h1>Admin access required</h1><p>This page is restricted to administrator accounts.</p><Link to="/login">Login</Link></section></main>;
-    }
-
-    const orderChartData = {
+    const orderChartData = useMemo(() => ({
         labels: analytics.ordersByDay.map(({ date }) =>
             new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })
         ),
@@ -85,16 +88,16 @@ export default function Admin({ user }) {
             backgroundColor: "#f59e0b",
             borderRadius: 6,
         }],
-    };
-    const categoryChartData = {
+    }), [analytics.ordersByDay]);
+    const categoryChartData = useMemo(() => ({
         labels: analytics.productsByCategory.map(({ category }) => category),
         datasets: [{
             label: "Products",
             data: analytics.productsByCategory.map(({ products: count }) => count),
             backgroundColor: ["#f59e0b", "#526b8f", "#10b981", "#f97316", "#8b5cf6", "#06b6d4"],
         }],
-    };
-    const salesChartData = {
+    }), [analytics.productsByCategory]);
+    const salesChartData = useMemo(() => ({
         labels: analytics.revenueByDay.map(({ date }) =>
             new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })
         ),
@@ -104,15 +107,45 @@ export default function Admin({ user }) {
             backgroundColor: "#10b981",
             borderRadius: 6,
         }],
-    };
+    }), [analytics.revenueByDay]);
+    const chartOptions = useMemo(() => {
+        const textColor = theme === "dark" ? "#e5e7eb" : "#374151";
+        const gridColor = theme === "dark" ? "rgba(203, 213, 225, 0.16)" : "rgba(55, 65, 81, 0.12)";
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            color: textColor,
+            scales: {
+                x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } },
+            },
+            plugins: { legend: { labels: { color: textColor } } },
+        };
+    }, [theme]);
+    const orderChartOptions = useMemo(() => ({
+        ...chartOptions,
+        scales: {
+            ...chartOptions.scales,
+            y: { ...chartOptions.scales.y, ticks: { ...chartOptions.scales.y.ticks, precision: 0 } },
+        },
+    }), [chartOptions]);
+    const categoryChartOptions = useMemo(() => ({
+        ...chartOptions,
+        plugins: { ...chartOptions.plugins, legend: { position: "bottom", labels: chartOptions.plugins.legend.labels } },
+    }), [chartOptions]);
+
+    if (!user || user.role !== "admin") {
+        return <main className="admin-page"><section className="admin-panel"><h1>Admin access required</h1><p>This page is restricted to administrator accounts.</p><Link to="/login">Login</Link></section></main>;
+    }
 
     function beginEdit(product) {
         setEditingId(product._id);
         setProductForm({
-            name: product.name || "", description: product.description || "",
+            name: product.name || "", brand: product.brand || "", description: product.description || "",
             price: String(product.price ?? ""),
             category: product.category?._id || product.category || "",
             image: product.image || "", stock: String(product.stock ?? 0),
+            isActive: product.isActive !== false,
         });
         setTab("products");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -234,13 +267,18 @@ export default function Admin({ user }) {
 
     return (
         <main className="admin-page">
-            <div className="admin-heading"><div><span className="admin-eyebrow">MARVET MANAGEMENT</span><h1>Admin Dashboard</h1><p>Manage your store inventory, categories, and orders.</p></div><button type="button" onClick={loadData} className="admin-secondary">Refresh</button></div>
+            <div className="admin-heading"><div><span className="admin-eyebrow">MARVET MANAGEMENT</span><h1>Admin Dashboard</h1><p>Manage your store inventory, categories, and orders.</p></div><button type="button" onClick={loadData} className="admin-secondary" disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button></div>
             {error && <div className="admin-alert admin-error" role="alert">{error}</div>}
             {notice && <div className="admin-alert admin-success" role="status">{notice}</div>}
             <nav className="admin-tabs" aria-label="Admin sections">
                 {[["overview", "Overview"], ["products", "Products"], ["categories", "Categories"], ["orders", "Orders"], ["users", "Users"]].map(([key, label]) => <button key={key} type="button" className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>)}
             </nav>
-            {loading ? <p className="admin-loading">Loading dashboard…</p> : <>
+            {loading ? <p className="admin-loading">Loading dashboard…</p> : !dataLoaded ? (
+                <section className="admin-section admin-load-error">
+                    <p role="alert">Dashboard data could not be loaded.</p>
+                    <button type="button" className="admin-secondary" onClick={loadData}>Try again</button>
+                </section>
+            ) : <>
                 {tab === "overview" && <>
                     <section className="admin-stats">
                         <article><span>Products</span><strong>{products.length}</strong></article>
@@ -255,36 +293,38 @@ export default function Admin({ user }) {
                             <h2>Sales per day</h2>
                             <p>Last 7 days; saved checkout prices are used when available.</p>
                             {analytics.revenueByDay.some(({ revenue }) => revenue > 0)
-                                ? <Bar data={salesChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />
+                                ? <Bar data={salesChartData} options={chartOptions} />
                                 : <p className="admin-chart-empty">No sales were recorded in the last 7 days.</p>}
                         </article>
                         <article className="admin-chart-card">
                             <h2>Orders per day</h2>
                             <p>Last 7 days, based on actual order records</p>
                             {analytics.ordersByDay.some(({ count }) => count > 0)
-                                ? <Bar data={orderChartData} options={{ responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }} />
+                                ? <Bar data={orderChartData} options={orderChartOptions} />
                                 : <p className="admin-chart-empty">No orders were placed in the last 7 days.</p>}
                         </article>
                         <article className="admin-chart-card">
                             <h2>Products by category</h2>
                             <p>Current product catalog</p>
                             {analytics.productsByCategory.length > 0
-                                ? <Doughnut data={categoryChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }} />
+                                ? <Doughnut data={categoryChartData} options={categoryChartOptions} />
                                 : <p className="admin-chart-empty">No product data is available yet.</p>}
                         </article>
                     </section>
                 </>}
                 {tab === "products" && <section className="admin-section"><h2>{editingId ? "Edit product" : "Add product"}</h2><form className="admin-form" onSubmit={submitProduct}>
                     <label>Product name<input required value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} /></label>
+                    <label>Brand (optional)<input maxLength="100" value={productForm.brand} onChange={e => setProductForm({ ...productForm, brand: e.target.value })} /></label>
                     <label>Description<textarea required rows="3" value={productForm.description} onChange={e => setProductForm({ ...productForm, description: e.target.value })} /></label>
                     <div className="admin-form-grid"><label>Price<input required type="number" min="0" step="0.01" value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} /></label><label>Stock<input required type="number" min="0" step="1" value={productForm.stock} onChange={e => setProductForm({ ...productForm, stock: e.target.value })} /></label></div>
                     <label>Category<select required value={productForm.category} onChange={e => setProductForm({ ...productForm, category: e.target.value })}><option value="">Choose category</option>{categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}</select></label>
                     <label>Image URL<input type="url" placeholder="https://…" value={productForm.image} onChange={e => setProductForm({ ...productForm, image: e.target.value })} /></label>
+                    {editingId && <label className="admin-visibility-toggle"><input type="checkbox" checked={productForm.isActive} onChange={e => setProductForm({ ...productForm, isActive: e.target.checked })} /> Visible in store</label>}
                     <div className="admin-form-actions"><button disabled={busy} type="submit">{busy ? "Saving…" : editingId ? "Save changes" : "Create product"}</button>{editingId && <button type="button" className="admin-secondary" onClick={() => { setEditingId(null); setProductForm(emptyProduct) }}>Cancel edit</button>}</div>
-                </form><h2 className="admin-list-title">Current products ({products.length})</h2><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody>{products.map(p => <tr key={p._id}><td>{p.name}</td><td>${Number(p.price || 0).toFixed(2)}</td><td>{p.stock ?? 0}</td><td className="admin-row-actions"><button type="button" onClick={() => beginEdit(p)}>Edit</button><button type="button" className="danger" onClick={() => removeProduct(p._id)}>Delete</button></td></tr>)}</tbody></table></div></section>}
+                </form><h2 className="admin-list-title">Current products ({products.length})</h2><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Product</th><th>Brand</th><th>Price</th><th>Stock</th><th>Visibility</th><th>Actions</th></tr></thead><tbody>{products.map(p => <tr key={p._id}><td>{p.name}</td><td>{p.brand || "—"}</td><td>${Number(p.price || 0).toFixed(2)}</td><td>{p.stock ?? 0}</td><td>{p.isActive === false ? "Archived (order history)" : "Visible"}</td><td className="admin-row-actions"><button type="button" onClick={() => beginEdit(p)}>Edit</button><button type="button" className="danger" onClick={() => removeProduct(p._id)}>Delete</button></td></tr>)}</tbody></table></div></section>}
                 {tab === "categories" && <section className="admin-section"><h2>{editingCategoryId ? "Edit category" : "Add category"}</h2><form className="admin-inline-form" onSubmit={submitCategory}><input required value={categoryForm.name} placeholder="Category name" onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })} /><textarea rows="2" value={categoryForm.description} placeholder="Description (optional)" onChange={e => setCategoryForm({ ...categoryForm, description: e.target.value })} /><button disabled={busy} type="submit">{busy ? "Saving…" : editingCategoryId ? "Save changes" : "Add category"}</button>{editingCategoryId && <button type="button" className="admin-secondary" disabled={busy} onClick={cancelCategoryEdit}>Cancel edit</button>}</form><div className="admin-category-list">{categories.map(c => <div key={c._id}><span>{c.name}</span><button type="button" onClick={() => beginEditCategory(c)}>Edit</button><button type="button" className="danger" onClick={() => removeCategory(c._id)}>Delete</button></div>)}</div></section>}
                 {tab === "orders" && <section className="admin-section"><h2>All orders ({orders.length})</h2>{orders.length === 0 ? <p>No orders yet.</p> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Products</th><th>Qty</th><th>Date</th><th>Status</th><th>Delivery</th><th>Actions</th></tr></thead><tbody>{orders.map(o => { const items = o.items?.length ? o.items : [{ product: o.product, quantity: o.quantity }]; const location = o.deliveryLocation; const canCancel = !["shipped", "delivered", "cancelled"].includes(o.status); return <tr key={o._id}><td>{String(o._id).slice(-7)}</td><td>{o.user?.name || o.user?.email || String(o.user || "—")}</td><td>{items.map(item => item.product?.name || item.productName || String(item.product || "—")).join(", ")}</td><td>{items.reduce((sum, item) => sum + item.quantity, 0)}</td><td>{o.createdAt ? new Date(o.createdAt).toLocaleDateString() : "—"}</td><td><select aria-label={`Status for order ${String(o._id).slice(-7)}`} disabled={o.status === "cancelled"} value={o.status || "pending"} onChange={(event) => changeOrderStatus(o._id, event.target.value)}><option value="pending">Pending</option><option value="processing">Processing</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option>{o.status === "cancelled" && <option value="cancelled">Cancelled</option>}</select></td><td>{location ? <a href={`https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`} target="_blank" rel="noreferrer">View map</a> : "Not shared"}</td><td><button type="button" className="danger" disabled={!canCancel} onClick={() => removeOrder(o._id)}>{o.status === "cancelled" ? "Cancelled" : canCancel ? "Cancel order" : "Cannot cancel"}</button></td></tr>; })}</tbody></table></div>}</section>}
-                {tab === "users" && <section className="admin-section"><h2>Users ({users.length})</h2><p>Role changes take effect for new authenticated requests after the user signs in again.</p>{users.length === 0 ? <p>No users found.</p> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody>{users.map((person) => { const isCurrentUser = String(person._id) === String(user.id || user._id); const selectedRole = roleDrafts[person._id] ?? person.role; return <tr key={person._id}><td>{person.name}</td><td>{person.email}</td><td><select aria-label={`Role for ${person.name}`} value={selectedRole} disabled={isCurrentUser} onChange={(event) => setRoleDrafts((current) => ({ ...current, [person._id]: event.target.value }))}><option value="user">Customer</option><option value="admin">Administrator</option></select>{isCurrentUser && <small> Your own role is locked.</small>}</td><td><button type="button" disabled={isCurrentUser || selectedRole === person.role} onClick={() => saveUserRole(person)}>Save role</button></td></tr>; })}</tbody></table></div>}</section>}
+                {tab === "users" && <section className="admin-section"><h2>Users ({users.length})</h2><p>Backend permissions use the current database role on each request. Sign out and back in to refresh the role shown in frontend navigation.</p>{users.length === 0 ? <p>No users found.</p> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody>{users.map((person) => { const isCurrentUser = String(person._id) === String(user.id || user._id); const selectedRole = roleDrafts[person._id] ?? person.role; return <tr key={person._id}><td>{person.name}</td><td>{person.email}</td><td><select aria-label={`Role for ${person.name}`} value={selectedRole} disabled={isCurrentUser} onChange={(event) => setRoleDrafts((current) => ({ ...current, [person._id]: event.target.value }))}><option value="user">Customer</option><option value="admin">Administrator</option></select>{isCurrentUser && <small> Your own role is locked.</small>}</td><td><button type="button" disabled={isCurrentUser || selectedRole === person.role} onClick={() => saveUserRole(person)}>Save role</button></td></tr>; })}</tbody></table></div>}</section>}
             </>}
         </main>
     );

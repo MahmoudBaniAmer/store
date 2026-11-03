@@ -1,143 +1,121 @@
-# Marvet
 
-Marvet is an existing MERN e-commerce demo with a React/Vite single-page frontend and an Express/Mongoose backend. It includes email/password and optional Google sign-in, catalog and category management, local browser cart/favorites, demo checkout, reviews, email notifications, an admin dashboard, maps, and a Gemini-powered store assistant.
+# Marvet — MERN E-Commerce
 
-The catalog supports search, filtering, sorting, and paginated results. Customers can manage their own reviews and view order status; administrators can manage users, product/category records, order statuses, and cancellations. Orders remain in the customer's history after cancellation, and cancelled orders are excluded from sales analytics. Categories that still have products cannot be deleted. Checkout records product name and price snapshots for order history and sales analytics. Optional delivery coordinates are attached to an order only after the customer explicitly consents.
+Marvet is a full-stack e-commerce web application built using the MERN stack. It provides a modern shopping experience where users can browse products, manage their carts and favorites, place demo orders, and interact with the store through a customer support assistant.
 
-## Requirements
+## Features
 
-- Node.js 20.19 or newer
-- npm
-- MongoDB. Checkout and order cancellation require a replica set or sharded cluster because they use transactions.
+- User registration and login
+- Product browsing, search, filtering, sorting, and pagination
+- Shopping cart and favorites
+- Demo checkout and order history
+- Product reviews and ratings
+- Admin dashboard for managing products, categories, users, and orders
+- Sales analytics dashboard
+- Email notifications
+- Optional delivery location sharing and map integration
+- Gemini-powered store assistant
+- Responsive interface with light and dark themes
 
-## Project structure
+## Technologies Used
+
+**Frontend**
+- React
+- Vite
+- JavaScript
+- CSS
+
+**Backend**
+- Node.js
+- Express.js
+- MongoDB
+- Mongoose
+- JWT Authentication
+
+## Project Structure
 
 ```text
-backend/   Express API, Mongoose models, controllers, routes, middleware, and seed script
-frontend/  React/Vite application, pages, components, and API services
-postman/   API collection, local environment template, and usage notes
+Marvet/
+├── backend/   # Express API, models, controllers, routes, and middleware
+├── frontend/  # React application
+└── postman/   # API collection and local testing environment
 ```
 
-## Install and run
+## Installation and Setup
 
-1. Install backend dependencies:
+### 1. Clone the repository
 
-   ```bash
-   cd backend
-   npm install
-   ```
+```bash
+git clone <repository-url>
+cd Marvet
+```
 
-2. Configure `backend/.env` locally. Start from `backend/.env.example` only if a local file does not already exist. Never commit or share the local file.
-3. Start the backend from `backend`:
-
-   ```bash
-   npm run dev
-   ```
-
-4. In a separate terminal, install and start the frontend:
-
-   ```bash
-   cd frontend
-   npm install
-   npm run dev -- --host 127.0.0.1 --port 5175 --strictPort
-   ```
-
-5. Open `http://127.0.0.1:5175`. The frontend API base defaults to `http://localhost:5000`; no Vite proxy is configured. If the backend uses another port, set `PORT` and `VITE_API_BASE_URL` to matching values. In local development, the backend allows localhost and 127.0.0.1 origins on any port.
-
-For production frontend assets, run `npm run build` in `frontend`. The backend start command is `npm start` in `backend`.
-
-## Main API routes
-
-- `GET /products`, `GET /products/:id` — public product catalog and details.
-- `GET /categories` — public category list.
-- `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/google` — authentication.
-- `/orders` — authenticated order creation/history; administrators can manage order status.
-- `/reviews/:productId` — public review listing; authenticated users can manage their own reviews.
-- `/api/admin/analytics` — administrator-only dashboard data.
-- `POST /api/chat` — optional Gemini-powered store assistant.
-
-Product/category writes and user-role management are administrator-only. Import the Postman collection for request bodies and additional endpoints.
-Authentication endpoints are rate limited per backend process: registration allows 5 attempts per hour, while password and Google sign-in share a limit of 10 attempts per 15 minutes per client IP. Use a shared rate-limit store if deploying multiple backend instances.
-
-## MongoDB and demo checkout
-
-Set `DATABASE_URI` to a development database you control. A standalone MongoDB server does not support the multi-document transactions used for checkout and cancellation. Use MongoDB Atlas or configure local MongoDB as a replica set; initialize the local replica set before running the API. When transactions are unavailable, checkout and cancellation intentionally fail rather than risk partial stock or order updates.
-
-Checkout is a demo order flow only. It does not collect card details or process real payments. The cart and favorites are kept in browser localStorage, scoped to the guest or signed-in user's ID; they are not synchronized to the database.
-
-## Environment configuration
-
-Copy the example files without overwriting existing local configuration:
-
-- Backend: `backend/.env.example` → `backend/.env`
-- Frontend: `frontend/.env.example` → `frontend/.env.local`
-
-The backend uses these variable names:
-
-- Required: `DATABASE_URI`, `SECRET`
-- Optional Google sign-in: `GOOGLE_CLIENT_ID` (the same public client ID is configured as `VITE_GOOGLE_CLIENT_ID`)
-- Optional Gemini assistant: `GEMINI_API_KEY`, `GEMINI_MODEL`
-- Optional email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`
-- Optional runtime/development: `PORT`, `NODE_ENV`
-- Production browser access: `CLIENT_ORIGINS` (comma-separated exact frontend origins; set this before deploying)
-
-The frontend uses `VITE_API_BASE_URL`, `VITE_GOOGLE_CLIENT_ID`, and `VITE_GOOGLE_MAPS_API_KEY` as needed. Vite variables are visible to browser users: never put Gemini keys, JWT secrets, SMTP credentials, or other server secrets in a `VITE_` variable.
-
-## Optional integrations
-
-### Google sign-in
-
-Create a Google OAuth web client. Configure the development and production JavaScript origins in its consent/client settings. Set its client ID in both `GOOGLE_CLIENT_ID` (backend) and `VITE_GOOGLE_CLIENT_ID` (frontend). The backend verifies the ID token audience and verified email before linking or creating a user. An existing account with the same verified email is linked rather than duplicated. Email/password login remains available.
-
-### Maps and location
-
-Enable the Google Maps JavaScript API and configure a browser key in `VITE_GOOGLE_MAPS_API_KEY`. Restrict the key to the required website referrers and API. Location permission is requested only after the customer presses the optional location button in the cart. Coordinates stay in page memory and are not submitted with the order unless the customer explicitly checks the delivery-location consent box. Consented coordinates are saved with that order for delivery and are visible to the customer and authorized store administrators. Without a maps key, the page offers an explicit Google Maps link after the customer chooses to share their location.
-
-### Gemini store assistant
-
-Set `GEMINI_API_KEY` only in the backend environment. `GEMINI_MODEL` optionally selects an available Gemini text model. The frontend calls the backend assistant endpoint; the API key is never sent to the browser. The assistant receives a limited snapshot of catalog data, has no order lookup access, validates message length/history, and has a basic in-memory per-process rate limit. Use a shared rate-limit store if deploying multiple backend instances. Gemini responses are informational, not order or payment actions.
-
-### Email
-
-SMTP configuration is optional. Welcome and order confirmation emails are best-effort; email delivery does not determine whether an account or order is created.
-
-## Sample data and admin account
-
-Seed products and categories in a development database only:
+### 2. Set up the backend
 
 ```bash
 cd backend
-NODE_ENV=development npm run seed
+npm install
 ```
 
-The seed is additive and idempotent: existing categories/products with the sample names are left unchanged. It creates no users, passwords, or administrator accounts. To create an admin in a development database, register a normal account, select the same development database in an authorized `mongosh` session, and promote only that account:
+Create a local `.env` file based on `backend/.env.example` and configure the required environment variables.
 
-```javascript
-db.users.updateOne(
-  { email: "<registered-account-email>" },
-  { $set: { role: "admin" } }
-)
+Start the backend:
+
+```bash
+npm run dev
 ```
 
-Do not add a default admin password or expose the account to a public database.
+### 3. Set up the frontend
 
-Admin analytics are served by an authenticated, admin-authorized API and use actual order and product records. Empty datasets display an empty state rather than invented statistics.
+Open a separate terminal:
 
-## Postman
+```bash
+cd frontend
+npm install
+```
 
-Import `postman/Marvet_API_Tests.postman_collection.json` and `postman/Marvet_Local.postman_environment.json`. See `postman/README.md` for test order, local environment setup, optional admin/Gemini scenarios, and cleanup notes. The collection does not contain production credentials. Live API tests require a running backend and database; atomic order tests require transaction support.
+Create a local `.env.local` file based on `frontend/.env.example` if needed.
 
-## Security notes
+Start the frontend:
 
-- Never commit `.env` files or real credentials. The backend environment file has previously been tracked by Git; remove it from repository tracking and rotate any credentials that may have been exposed. Keep the local file out of exported archives and source control.
-- Google Maps browser keys and Google OAuth client IDs are public identifiers, not server secrets. Restrict the Maps key by referrer and API.
-- Set a unique, high-entropy `SECRET` locally and keep it only on the backend.
-- There is no real payment gateway, card collection, or card data storage.
+```bash
+npm run dev -- --host 127.0.0.1 --port 5175 --strictPort
+```
 
-## Validation
+Open the application at:
 
-Run backend JavaScript syntax checks with `node --check` on the backend source files. Run the frontend production build with `npm run build` and lint with `npm run lint` from `frontend`. The backend package currently has no automated test suite configured. External Google, Gemini, SMTP, MongoDB, and browser-location integrations require local credentials/infrastructure and must be tested separately.
+```text
+http://127.0.0.1:5175
+```
 
-## Deployment notes
+## Environment Variables
 
-Set `NODE_ENV=production`, a strong backend-only `SECRET`, `DATABASE_URI`, and exact comma-separated frontend origins in `CLIENT_ORIGINS`. Configure HTTPS, restrict browser API keys by origin and API, and keep backend environment files outside source control and deployment artifacts. Use a MongoDB replica set or sharded cluster for atomic checkout and cancellation; no real payment processing is included.
+The backend requires:
+
+- `DATABASE_URI`
+- `SECRET`
+
+Optional backend integrations:
+
+- `GEMINI_API_KEY`
+- `GEMINI_MODEL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `EMAIL_FROM`
+
+The frontend may use:
+
+- `VITE_API_BASE_URL`
+- `VITE_GOOGLE_MAPS_API_KEY`
+
+**Do not commit `.env` or `.env.local` files, or include real credentials in the repository.**
+
+## Demo Limitations
+
+- Checkout is for demonstration purposes and does not process real payments.
+- Google Sign-In is currently disabled.
+- Gemini, email notifications, and maps require their respective configuration.
+- Checkout and order cancellation require MongoDB transaction support.
+

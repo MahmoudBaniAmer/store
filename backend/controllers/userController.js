@@ -2,9 +2,7 @@ const User = require("../models/User");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { OAuth2Client } = require("google-auth-library");
 const { sendWelcomeEmail } = require("../services/emailService");
-const googleClient = new OAuth2Client();
 
 function createAuthToken(user) {
     return jwt.sign(
@@ -153,93 +151,6 @@ const login = async (req, res) => {
     }
 };
 
-const googleLogin = async (req, res) => {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const credential = req.body?.credential;
-
-    if (!clientId) {
-        return res.status(503).json({
-            message: "Google sign-in is not configured"
-        });
-    }
-
-    if (typeof credential !== "string" || credential.length === 0) {
-        return res.status(400).json({
-            message: "A Google ID token is required"
-        });
-    }
-
-    try {
-        const ticket = await googleClient.verifyIdToken({
-            idToken: credential,
-            audience: clientId
-        });
-        const payload = ticket.getPayload();
-
-        if (
-            !payload?.sub ||
-            !payload.email ||
-            payload.email_verified !== true
-        ) {
-            return res.status(401).json({
-                message: "Google account email must be verified"
-            });
-        }
-
-        const email = payload.email.trim().toLowerCase();
-        let user = await User.findOne({ email });
-        let isNewUser = false;
-
-        if (user) {
-            if (user.googleId && user.googleId !== payload.sub) {
-                return res.status(409).json({
-                    message: "This email is already linked to another Google account"
-                });
-            }
-
-            if (!user.googleId) {
-                user.googleId = payload.sub;
-                await user.save();
-            }
-        } else {
-            user = await User.create({
-                name: payload.name?.trim() || email.split("@")[0],
-                email,
-                googleId: payload.sub
-            });
-            isNewUser = true;
-        }
-
-        let emailSent = false;
-        if (isNewUser) {
-            try {
-                await sendWelcomeEmail(user);
-                emailSent = true;
-            } catch (emailError) {
-                console.error("Welcome email failed:", emailError.name);
-            }
-        }
-
-        return res.status(200).json({
-            message: isNewUser ? "Google account created successfully" : "Login successful",
-            token: createAuthToken(user),
-            user: getAuthUser(user),
-            emailSent
-        });
-    } catch (error) {
-        if (error.code === 11000) {
-            return res.status(409).json({
-                message: "This Google account is already linked to another user"
-            });
-        }
-
-        console.error("GOOGLE AUTHENTICATION ERROR:", error.name);
-        return res.status(401).json({
-            message: "Google sign-in could not be verified"
-        });
-    }
-};
-
 // Get All Users (Admin Only)
 const getUsers = async (req, res) => {
     try {
@@ -309,7 +220,6 @@ const updateUserRole = async (req, res) => {
 module.exports = {
     createUser,
     login,
-    googleLogin,
     getUsers,
     updateUserRole
 };

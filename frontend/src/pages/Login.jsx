@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { loginUser } from "../services/authService";
-import GoogleAuthButton from "../components/GoogleAuthButton";
 
 function Login({ onLogin }) {
     const [email, setEmail] = useState("");
@@ -60,8 +59,6 @@ function Login({ onLogin }) {
                 <button type="submit" disabled={loading}>
                     {loading ? "Logging in..." : "Login"}
                 </button>
-
-                <GoogleAuthButton onLogin={onLogin} onError={setError} onLoading={setLoading} />
 
                 <p>
                     Don't have an account? <Link to="/register">Register</Link>

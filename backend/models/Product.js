@@ -8,6 +8,13 @@ const productSchema = new mongoose.Schema(
             trim: true,
         },
 
+        brand: {
+            type: String,
+            trim: true,
+            maxlength: 100,
+            default: "",
+        },
+
         description: {
             type: String,
             required: true,
@@ -40,6 +47,11 @@ const productSchema = new mongoose.Schema(
         inStock: {
             type: Boolean,
             default: false,
+        },
+
+        isActive: {
+            type: Boolean,
+            default: true,
         },
 
         createdAt: {

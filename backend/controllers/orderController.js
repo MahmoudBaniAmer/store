@@ -3,12 +3,30 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const User = require("../models/User");
 const { sendOrderConfirmation } = require("../services/emailService");
+const { createOrderRequestHash, isValidIdempotencyKey } = require("../utils/orderIdempotency");
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
+function getPublicOrder(order) {
+    const publicOrder = order.toObject();
+    delete publicOrder.idempotencyKey;
+    delete publicOrder.idempotencyHash;
+    return publicOrder;
+}
+
 // Create Order
 const createOrder = async (req, res) => {
+    let userId;
+    let idempotencyKey;
+    let idempotencyHash;
     try {
+        idempotencyKey = req.get("Idempotency-Key");
+        if (idempotencyKey !== undefined && !isValidIdempotencyKey(idempotencyKey)) {
+            return res.status(400).json({
+                message: "Idempotency-Key must be a UUID v4 value"
+            });
+        }
+
         const deliveryLocation = req.body.deliveryLocation;
         if (deliveryLocation !== undefined && deliveryLocation !== null) {
             const { lat, lng } = deliveryLocation;
@@ -61,7 +79,7 @@ const createOrder = async (req, res) => {
             );
         }
 
-        const userId = req.token?.id;
+        userId = req.token?.id;
         if (!userId || !isValidId(userId)) {
             return res.status(401).json({
                 message: "Invalid user authentication"
@@ -72,6 +90,25 @@ const createOrder = async (req, res) => {
             product,
             quantity
         }));
+        if (idempotencyKey) {
+            idempotencyHash = createOrderRequestHash(normalizedItems, deliveryLocation);
+            const existingOrder = await Order.findOne({ user: userId, idempotencyKey })
+                .select("+idempotencyHash");
+            if (existingOrder) {
+                if (existingOrder.idempotencyHash !== idempotencyHash) {
+                    return res.status(409).json({
+                        message: "This checkout key was already used for a different order"
+                    });
+                }
+
+                return res.status(200).json({
+                    message: "Order was already processed",
+                    replayed: true,
+                    order: getPublicOrder(existingOrder)
+                });
+            }
+        }
+
         const session = await mongoose.startSession();
         let order;
         let productsById = new Map();
@@ -79,7 +116,8 @@ const createOrder = async (req, res) => {
         try {
             await session.withTransaction(async () => {
                 const products = await Product.find({
-                    _id: { $in: normalizedItems.map((item) => item.product) }
+                    _id: { $in: normalizedItems.map((item) => item.product) },
+                    isActive: { $ne: false }
                 }).session(session);
                 productsById = new Map(products.map((product) => [product._id.toString(), product]));
 
@@ -141,6 +179,7 @@ const createOrder = async (req, res) => {
                         }),
                         ...(normalizedItems.length === 1 ? normalizedItems[0] : {}),
                         user: userId,
+                        ...(idempotencyKey ? { idempotencyKey, idempotencyHash } : {}),
                         ...(deliveryLocation ? { deliveryLocation } : {})
                     }],
                     { session }
@@ -171,9 +210,28 @@ const createOrder = async (req, res) => {
         return res.status(201).json({
             message: "Order created successfully",
             emailSent,
-            order
+            replayed: false,
+            order: getPublicOrder(order)
         });
     } catch (error) {
+        if (error.code === 11000 && idempotencyKey && userId) {
+            const existingOrder = await Order.findOne({ user: userId, idempotencyKey })
+                .select("+idempotencyHash");
+            if (existingOrder) {
+                if (existingOrder.idempotencyHash !== idempotencyHash) {
+                    return res.status(409).json({
+                        message: "This checkout key was already used for a different order"
+                    });
+                }
+
+                return res.status(200).json({
+                    message: "Order was already processed",
+                    replayed: true,
+                    order: getPublicOrder(existingOrder)
+                });
+            }
+        }
+
         const transactionUnavailable =
             error.code === 20 ||
             /transaction numbers are only allowed|replica set|mongos/i.test(error.message);

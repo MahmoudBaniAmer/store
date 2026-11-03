@@ -21,11 +21,7 @@ async function request(path, options = {}) {
     return data;
 }
 
-export const adminGetProducts = () => fetch(`${API_BASE}/products`).then(async (r) => {
-    const data = await r.json().catch(() => []);
-    if (!r.ok) throw new Error(data?.message || "Could not load products");
-    return data;
-});
+export const adminGetProducts = () => request("/products/admin");
 export const adminGetCategories = () => fetch(`${API_BASE}/categories`).then(async (r) => {
     const data = await r.json().catch(() => []);
     if (!r.ok) throw new Error(data?.message || "Could not load categories");

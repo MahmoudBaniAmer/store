@@ -119,6 +119,7 @@ function ProductDetails({ user, onAddToCart, onToggleFavorite, isFavorite = () =
                 </div>
                 <div className="product-details-info">
                     <p className="product-category">{categoryName || "General"}</p>
+                    {product.brand && <p className="product-brand">{product.brand}</p>}
                     <h1>{productName}</h1>
                     <div className="product-details-price-row">
                         <p className="product-details-price">${productPrice.toFixed(2)}</p>

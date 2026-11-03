@@ -100,6 +100,8 @@ function ProductCard({
                         {categoryName || "General"}
                     </p>
 
+                    {product.brand && <p className="product-brand">{product.brand}</p>}
+
                     <h3 className="product-name">{productName}</h3>
 
                     {Number(product.reviewCount) > 0 && (
