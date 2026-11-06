@@ -54,6 +54,12 @@ const productSchema = new mongoose.Schema(
             default: true,
         },
 
+        restockedOrderIds: {
+            type: [mongoose.Schema.Types.ObjectId],
+            default: undefined,
+            select: false,
+        },
+
         createdAt: {
             type: Date,
             default: Date.now,

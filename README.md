@@ -117,5 +117,5 @@ The frontend may use:
 - Checkout is for demonstration purposes and does not process real payments.
 - Google Sign-In is currently disabled.
 - Gemini, email notifications, and maps require their respective configuration.
-- Checkout and order cancellation require MongoDB transaction support.
-
+- Standalone MongoDB is supported for local demo checkout. Stock is updated with conditional single-document writes; failed order creation triggers compensating stock restoration.
+- Cancellation uses per-order stock-restoration markers so a retry can safely resume. MongoDB standalone cannot make stock and order writes across multiple documents fully atomic; a process or machine failure during checkout may still require manual inventory reconciliation. Use replica-set transactions for stronger production guarantees.

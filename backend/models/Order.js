@@ -59,6 +59,12 @@ const orderSchema = new mongoose.Schema(
             default: "pending"
         },
 
+        cancellationPending: {
+            type: Boolean,
+            default: false,
+            select: false
+        },
+
         deliveryLocation: {
             type: deliveryLocationSchema,
             default: undefined

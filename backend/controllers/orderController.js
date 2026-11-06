@@ -4,6 +4,12 @@ const Product = require("../models/Product");
 const User = require("../models/User");
 const { sendOrderConfirmation } = require("../services/emailService");
 const { createOrderRequestHash, isValidIdempotencyKey } = require("../utils/orderIdempotency");
+const {
+    adjustProductStock,
+    reserveOrderStock,
+    rollbackReservedStock,
+    restockCancelledItems
+} = require("../utils/standaloneInventory");
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -109,84 +115,52 @@ const createOrder = async (req, res) => {
             }
         }
 
-        const session = await mongoose.startSession();
+        const products = await Product.find({
+            _id: { $in: normalizedItems.map((item) => item.product) },
+            isActive: { $ne: false }
+        });
+        const availableProducts = new Map(products.map((product) => [product._id.toString(), product]));
+
+        for (const item of normalizedItems) {
+            const product = availableProducts.get(item.product);
+            if (!product) {
+                return res.status(404).json({
+                    message: "One or more products were not found"
+                });
+            }
+            if (product.stock < item.quantity) {
+                return res.status(409).json({
+                    message: `Insufficient stock for ${product.name}. Available quantity: ${product.stock}`
+                });
+            }
+        }
+
+        const { productsById, reservedItems } = await reserveOrderStock(normalizedItems, Product);
         let order;
-        let productsById = new Map();
-
         try {
-            await session.withTransaction(async () => {
-                const products = await Product.find({
-                    _id: { $in: normalizedItems.map((item) => item.product) },
-                    isActive: { $ne: false }
-                }).session(session);
-                productsById = new Map(products.map((product) => [product._id.toString(), product]));
-
-                for (const item of normalizedItems) {
+            [order] = await Order.create([{
+                items: normalizedItems.map((item) => {
                     const product = productsById.get(item.product);
-                    if (!product) {
-                        const error = new Error("One or more products were not found");
-                        error.statusCode = 404;
-                        throw error;
-                    }
-
-                    if (product.stock < item.quantity) {
-                        const error = new Error(
-                            `Insufficient stock for ${product.name}. Available quantity: ${product.stock}`
-                        );
-                        error.statusCode = 409;
-                        throw error;
-                    }
-                }
-
-                const updatedProducts = new Map();
-                for (const item of normalizedItems) {
-                    const product = await Product.findOneAndUpdate(
-                        {
-                            _id: item.product,
-                            stock: { $gte: item.quantity }
-                        },
-                        {
-                            $inc: { stock: -item.quantity }
-                        },
-                        {
-                            new: true,
-                            runValidators: true,
-                            session
-                        }
-                    );
-
-                    if (!product) {
-                        const error = new Error("Insufficient stock for one or more products");
-                        error.statusCode = 409;
-                        throw error;
-                    }
-
-                    product.inStock = product.stock > 0;
-                    await product.save({ session });
-                    updatedProducts.set(product._id.toString(), product);
-                }
-
-                productsById = updatedProducts;
-                [order] = await Order.create(
-                    [{
-                        items: normalizedItems.map((item) => {
-                            const product = productsById.get(item.product);
-                            return {
-                                ...item,
-                                productName: product.name,
-                                unitPrice: product.price
-                            };
-                        }),
-                        ...(normalizedItems.length === 1 ? normalizedItems[0] : {}),
-                        user: userId,
-                        ...(idempotencyKey ? { idempotencyKey, idempotencyHash } : {}),
-                        ...(deliveryLocation ? { deliveryLocation } : {})
-                    }],
-                    { session }
-                );
-            });
-        } finally {
-            await session.endSession();
+                    return {
+                        ...item,
+                        productName: product.name,
+                        unitPrice: product.price
+                    };
+                }),
+                ...(normalizedItems.length === 1 ? normalizedItems[0] : {}),
+                user: userId,
+                ...(idempotencyKey ? { idempotencyKey, idempotencyHash } : {}),
+                ...(deliveryLocation ? { deliveryLocation } : {})
+            }]);
+        } catch (error) {
+            const rollbackFailures = await rollbackReservedStock(
+                reservedItems,
+                (productId, quantity) => adjustProductStock(Product, productId, quantity)
+            );
+            if (rollbackFailures.length > 0) {
+                error.inventoryRollbackFailed = true;
+            }
+            throw error;
         }
 
         let emailSent = false;
@@ -214,9 +188,20 @@ const createOrder = async (req, res) => {
             order: getPublicOrder(order)
         });
     } catch (error) {
+        if (error.inventoryRollbackFailed) {
+            return res.status(503).json({
+                message: "Checkout could not finish and inventory restoration needs attention. Do not retry this order; contact store support."
+            });
+        }
+
         if (error.code === 11000 && idempotencyKey && userId) {
-            const existingOrder = await Order.findOne({ user: userId, idempotencyKey })
-                .select("+idempotencyHash");
+            let existingOrder;
+            try {
+                existingOrder = await Order.findOne({ user: userId, idempotencyKey })
+                    .select("+idempotencyHash");
+            } catch (lookupError) {
+                console.error("CHECKOUT RETRY LOOKUP ERROR:", lookupError.name);
+            }
             if (existingOrder) {
                 if (existingOrder.idempotencyHash !== idempotencyHash) {
                     return res.status(409).json({
@@ -230,16 +215,6 @@ const createOrder = async (req, res) => {
                     order: getPublicOrder(existingOrder)
                 });
             }
-        }
-
-        const transactionUnavailable =
-            error.code === 20 ||
-            /transaction numbers are only allowed|replica set|mongos/i.test(error.message);
-
-        if (transactionUnavailable) {
-            return res.status(503).json({
-                message: "Atomic checkout requires MongoDB transaction support (replica set or sharded cluster)"
-            });
         }
 
         if (error.statusCode) {
@@ -292,7 +267,6 @@ const getOrders = async (req, res) => {
 // Cancel order
 // Customers can cancel their own orders; admins can cancel any order.
 const cancelOrder = async (req, res) => {
-    let responseStatus = 500;
     try {
         const { id } = req.params;
 
@@ -302,73 +276,88 @@ const cancelOrder = async (req, res) => {
             });
         }
 
-        const session = await mongoose.startSession();
-        try {
-            await session.withTransaction(async () => {
-                const order = await Order.findById(id).session(session);
+        let order = await Order.findById(id).select("+cancellationPending");
+        if (!order) {
+            return res.status(404).json({ message: "Order not found" });
+        }
 
-                if (!order) {
-                    responseStatus = 404;
-                    throw new Error("Order not found");
-                }
+        const userId = req.token?.id;
+        const isAdmin = req.token?.role === "admin";
+        const isOwner = order.user.toString() === userId;
 
-                const userId = req.token?.id;
-                const isAdmin = req.token?.role === "admin";
-                const isOwner = order.user.toString() === userId;
-
-                if (!isAdmin && !isOwner) {
-                    responseStatus = 403;
-                    throw new Error("You are not allowed to cancel this order");
-                }
-
-                if (["shipped", "delivered"].includes(order.status)) {
-                    responseStatus = 409;
-                    throw new Error("Shipped or delivered orders cannot be cancelled");
-                }
-
-                if (order.status === "cancelled") {
-                    responseStatus = 409;
-                    throw new Error("This order has already been cancelled");
-                }
-
-                const items = order.items?.length
-                    ? order.items
-                    : [{ product: order.product, quantity: order.quantity }];
-
-                for (const item of items) {
-                    const product = await Product.findById(item.product).session(session);
-                    if (!product) continue;
-
-                    product.stock += item.quantity;
-                    product.inStock = product.stock > 0;
-                    await product.save({ session });
-                }
-
-                order.status = "cancelled";
-                await order.save({ session });
+        if (!isAdmin && !isOwner) {
+            return res.status(403).json({
+                message: "You are not allowed to cancel this order"
             });
-        } finally {
-            await session.endSession();
+        }
+
+        if (["shipped", "delivered"].includes(order.status)) {
+            return res.status(409).json({
+                message: "Shipped or delivered orders cannot be cancelled"
+            });
+        }
+
+        if (order.status === "cancelled") {
+            return res.status(409).json({
+                message: "This order has already been cancelled"
+            });
+        }
+
+        if (!order.cancellationPending) {
+            order = await Order.findOneAndUpdate(
+                {
+                    _id: id,
+                    status: order.status,
+                    cancellationPending: { $ne: true }
+                },
+                { $set: { cancellationPending: true } },
+                { new: true }
+            ).select("+cancellationPending");
+
+            if (!order) {
+                order = await Order.findById(id).select("+cancellationPending");
+                if (!order || !order.cancellationPending) {
+                    return res.status(409).json({
+                        message: "Order status changed. Refresh and try again."
+                    });
+                }
+            }
+        }
+
+        const items = order.items?.length
+            ? order.items
+            : [{ product: order.product, quantity: order.quantity }];
+
+        await restockCancelledItems(items, order._id, Product);
+
+        const cancelledOrder = await Order.findOneAndUpdate(
+            { _id: order._id, cancellationPending: true },
+            { $set: { status: "cancelled", cancellationPending: false } },
+            { new: true }
+        );
+        if (!cancelledOrder) {
+            const currentOrder = await Order.findById(order._id).select("status");
+            if (currentOrder?.status !== "cancelled") {
+                return res.status(503).json({
+                    message: "Cancellation is incomplete. Retry the cancellation to safely finish restoring stock."
+                });
+            }
         }
 
         return res.status(200).json({
             message: "Order cancelled successfully"
         });
     } catch (error) {
-        const transactionUnavailable =
-            error.code === 20 ||
-            /transaction numbers are only allowed|replica set|mongos/i.test(error.message);
+        console.error("CANCEL ORDER ERROR:", error.name);
 
-        if (transactionUnavailable) {
+        if (error.name === "MongoServerError" || error.name === "MongoNetworkError") {
             return res.status(503).json({
-                message: "Atomic order cancellation requires MongoDB transaction support (replica set or sharded cluster)"
+                message: "Cancellation could not finish. Retry the cancellation to safely continue restoring stock."
             });
         }
 
-        if (responseStatus === 500) console.error("CANCEL ORDER ERROR:", error.name);
-
-        return res.status(responseStatus).json({
-            message: responseStatus === 500 ? "Failed to cancel order" : error.message
+        return res.status(500).json({
+            message: "Cancellation could not finish. Retry the cancellation to safely continue restoring stock."
         });
     }
 };
@@ -394,17 +383,24 @@ const updateOrderStatus = async (req, res) => {
             });
         }
 
-        const existingOrder = await Order.findById(id).select("status");
+        const existingOrder = await Order.findById(id).select("status +cancellationPending");
         if (!existingOrder) {
             return res.status(404).json({ message: "Order not found" });
         }
         if (existingOrder.status === "cancelled") {
             return res.status(409).json({ message: "Cancelled orders cannot be updated" });
         }
+        if (existingOrder.cancellationPending) {
+            return res.status(409).json({ message: "Order cancellation is in progress" });
+        }
 
-        const order = await Order.findByIdAndUpdate(
-            id,
-            { status },
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: id,
+                status: existingOrder.status,
+                cancellationPending: { $ne: true }
+            },
+            { $set: { status } },
             { new: true, runValidators: true }
         )
             .populate("product")
